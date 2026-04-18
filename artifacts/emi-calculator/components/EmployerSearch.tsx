@@ -71,22 +71,17 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
   const [inputText, setInputText] = useState(value?.employer_name || "");
   const inputRef = useRef<TextInput>(null);
 
-  // Sync if value changes externally (e.g. clear)
+  // Sync display text when an employer is selected externally
   useEffect(() => {
-    if (!value) setInputText(query);
-    else setInputText(value.employer_name);
+    if (value) setInputText(value.employer_name);
+    // When value is null, don't overwrite — user may be actively typing
   }, [value]);
 
   function handleChangeText(text: string) {
     setInputText(text);
     if (value) onSelect(null);
     setQuery(text);
-    // Open sheet when user types 3+ chars and results arrive
-    if (text.length >= 3) {
-      setSheetOpen(true);
-    } else {
-      setSheetOpen(false);
-    }
+    // Sheet stays open while user is typing — don't close it here
   }
 
   function handleSelect(employer: EmployerResult) {
