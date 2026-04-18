@@ -316,7 +316,7 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
                       ]}
                     >
                       <Feather
-                        name="building"
+                        name="briefcase"
                         size={14}
                         color={item.is_blocked ? colors.destructive : colors.primary}
                       />
