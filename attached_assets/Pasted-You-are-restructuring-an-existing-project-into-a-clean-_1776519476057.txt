@@ -1,0 +1,191 @@
+You are restructuring an existing project into a clean mobile application using Expo (React Native). The current project is invalid and must be fully replaced.
+
+---
+
+## Objective
+
+Build a mobile app where users can directly check eligibility (no login, no authentication).
+
+Use:
+
+* Expo (latest)
+* TypeScript
+* Expo Router
+* Supabase (database only, no auth)
+
+---
+
+## Step 1: Remove Existing Structure
+
+Delete:
+
+* old package.json
+* pnpm configs
+* node_modules
+* workspace folders (artifacts/, scripts/, etc.)
+
+Do not reuse any legacy setup.
+
+---
+
+## Step 2: Create New Folder Structure
+
+app/
+_layout.tsx
+index.tsx
+eligibility.tsx
+result.tsx
+
+components/
+Input.tsx
+Button.tsx
+Card.tsx
+
+lib/
+supabase.ts
+
+services/
+eligibilityService.ts
+
+hooks/
+useEligibility.ts
+
+utils/
+helpers.ts
+
+assets/
+images/
+
+---
+
+## Step 3: App Flow
+
+index.tsx:
+
+* Redirect to eligibility screen
+
+eligibility.tsx:
+
+* Form inputs:
+
+  * income
+  * expenses
+  * loan amount
+  * tenure
+* Submit button
+* Calls eligibilityService
+
+result.tsx:
+
+* Display eligibility result
+* Show calculated EMI and approval status
+
+---
+
+## Step 4: Supabase Setup (Database Only)
+
+.env:
+
+EXPO_PUBLIC_SUPABASE_URL=YOUR_URL
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_KEY
+
+lib/supabase.ts:
+
+* Initialize client
+* No authentication usage
+
+---
+
+## Step 5: Business Logic
+
+services/eligibilityService.ts:
+
+* calculateEMI()
+* checkEligibility()
+* optionally store results in Supabase
+
+---
+
+## Step 6: Navigation
+
+Use Expo Router:
+
+* _layout.tsx defines stack
+* navigation between eligibility → result
+
+---
+
+## Step 7: package.json
+
+{
+"name": "emi-check",
+"version": "1.0.0",
+"main": "expo-router/entry",
+"scripts": {
+"start": "expo start"
+},
+"dependencies": {
+"expo": "^55.0.0",
+"expo-router": "^3.5.0",
+"react": "18.x",
+"react-native": "0.74.x",
+"@supabase/supabase-js": "^2.0.0",
+"react-native-url-polyfill": "^2.0.0"
+}
+}
+
+---
+
+## Step 8: Config Files
+
+app.json:
+
+* include android.package
+
+eas.json:
+
+{
+"build": {
+"preview": {
+"android": {
+"buildType": "apk"
+}
+},
+"production": {
+"android": {
+"buildType": "app-bundle"
+}
+}
+}
+}
+
+---
+
+## Step 9: Validation
+
+Ensure:
+
+* App runs with npx expo start
+* Form works without login
+* Navigation works
+* No legacy code remains
+
+---
+
+## Critical Rules
+
+* No authentication screens
+* No Supabase auth usage
+* Clean mobile-only architecture
+* Do not reuse old workspace configs
+
+---
+
+## Final Goal
+
+A working mobile app where:
+
+* User enters financial details
+* App calculates EMI
+* Displays eligibility result
+* Ready for APK/AAB build
