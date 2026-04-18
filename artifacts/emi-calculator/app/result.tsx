@@ -159,7 +159,6 @@ export default function Screen4Result() {
 
         // Employment
         employment_type: employment.employment_type,
-        employer_name: employment.employer_name ?? null,
 
         // Salaried
         employer_category: employment.employer_category ?? null,
