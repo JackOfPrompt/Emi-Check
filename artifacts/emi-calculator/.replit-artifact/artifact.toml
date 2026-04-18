@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "EMI Eligibility Calculator"
+version = "1.0.0"
+id = "artifacts/emi-calculator"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 23320
+
+[services.development]
+run = "pnpm --filter @workspace/emi-calculator run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/emi-calculator", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/emi-calculator", "run", "serve" ]
+
+[services.env]
+PORT = "23320"
+BASE_PATH = "/"
