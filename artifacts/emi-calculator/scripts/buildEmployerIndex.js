@@ -42,8 +42,27 @@ function getFoir(category, lenderGuidance) {
   return FOIR_MAP[category] ?? 0.55;
 }
 
+/**
+ * Canonical normalization used for deduplication keying.
+ * Strips parentheticals, unifies pvt/private and ltd/limited variants.
+ */
 function normalizeKey(name) {
-  return name.toLowerCase().replace(/\s+/g, " ").replace(/[.,\-_&]/g, " ").replace(/\s+/g, " ").trim();
+  let s = name.toLowerCase();
+  // Strip parenthetical content: "(formerly ...)", "(a division of ...)", etc.
+  s = s.replace(/\s*\([^)]*\)/g, "");
+  // Punctuation → space (but keep apostrophes in names)
+  s = s.replace(/[.,\-_]/g, " ");
+  s = s.replace(/&/g, " and ");
+  // Normalize: "private" → "pvt", "limited" → "ltd" (word-boundary safe)
+  s = s.replace(/\bprivate\b/g, "pvt");
+  s = s.replace(/\blimited\b/g, "ltd");
+  // Strip trailing dots from abbreviations already in text
+  s = s.replace(/\bpvt\.\b/g, "pvt");
+  s = s.replace(/\bltd\.\b/g, "ltd");
+  // Remove pure noise suffixes that add no identity value
+  s = s.replace(/\b(llp|llc|inc|corp|corporation)\b/g, "");
+  // Collapse whitespace
+  return s.replace(/\s+/g, " ").trim();
 }
 
 const employerMap = new Map();
@@ -72,6 +91,7 @@ for (const { file, lender, display } of LENDER_FILES) {
     if (!employerMap.has(key)) {
       employerMap.set(key, {
         n: rawName,
+        k: key,           // store the canonical key for search use
         best_foir: isBlocked ? -1 : foir,
         best_category: category,
         lenders: {},
@@ -115,6 +135,7 @@ for (const [, e] of employerMap) {
 
   employers.push({
     n: e.n,
+    k: e.k,                 // canonical normalized key (used by search API)
     c: e.best_category,
     f: e.best_foir < 0 ? 0 : Math.round(e.best_foir * 100) / 100,
     l: lenderList,

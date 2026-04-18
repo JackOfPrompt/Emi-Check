@@ -6,11 +6,16 @@ const router = Router();
 
 interface IndexEntry {
   n: string;
+  k: string;
   c: string;
   f: number;
   l: string[];
   lc: { lender: string; display: string; category: string; foir: number }[];
   b: 0 | 1;
+}
+
+interface SearchEntry extends IndexEntry {
+  _k: string; // canonical key used for matching (falls back to computed if k absent)
 }
 
 interface EmployerResult {
@@ -22,8 +27,25 @@ interface EmployerResult {
   is_blocked: boolean;
 }
 
-let employers: IndexEntry[] = [];
+let employers: SearchEntry[] = [];
 let indexLoaded = false;
+
+/**
+ * Canonical normalization — must exactly match buildEmployerIndex.js normalizeKey().
+ * Strips parentheticals, unifies pvt/private, ltd/limited, removes noise suffixes.
+ */
+function canonicalNorm(s: string): string {
+  let r = s.toLowerCase();
+  r = r.replace(/\s*\([^)]*\)/g, "");          // strip (formerly ...) / (a division of ...)
+  r = r.replace(/[.,\-_]/g, " ");
+  r = r.replace(/&/g, " and ");
+  r = r.replace(/\bprivate\b/g, "pvt");
+  r = r.replace(/\blimited\b/g, "ltd");
+  r = r.replace(/\bpvt\.\b/g, "pvt");
+  r = r.replace(/\bltd\.\b/g, "ltd");
+  r = r.replace(/\b(llp|llc|inc|corp|corporation)\b/g, "");
+  return r.replace(/\s+/g, " ").trim();
+}
 
 function loadIndex() {
   if (indexLoaded) return;
@@ -36,7 +58,11 @@ function loadIndex() {
   try {
     const raw = fs.readFileSync(indexPath, "utf8");
     const data = JSON.parse(raw);
-    employers = data.employers || [];
+    // Pre-compute _k once at load: use stored k if available, otherwise compute
+    employers = (data.employers || []).map((emp: IndexEntry) => ({
+      ...emp,
+      _k: emp.k ?? canonicalNorm(emp.n),
+    }));
     indexLoaded = true;
     console.info(`[employers] Loaded ${employers.length.toLocaleString()} employer records`);
   } catch (e) {
@@ -45,33 +71,55 @@ function loadIndex() {
   }
 }
 
-function norm(s: string): string {
-  return s.toLowerCase().replace(/[.\-_,&]/g, " ").replace(/\s+/g, " ").trim();
+/**
+ * Score a match (lower = better rank):
+ *   0 — exact key match
+ *   1 — key starts with query
+ *   2 — any word in key starts with query
+ *   3 — key contains query (substring)
+ *   4 — all query tokens present anywhere in key
+ */
+function matchScore(empKey: string, queryNorm: string, queryTokens: string[]): number | null {
+  if (empKey === queryNorm) return 0;
+  if (empKey.startsWith(queryNorm)) return 1;
+  if (empKey.split(" ").some((w) => w.startsWith(queryNorm))) return 2;
+  if (empKey.includes(queryNorm)) return 3;
+  // Multi-token: all tokens must appear as word-starts somewhere in the key
+  if (queryTokens.length >= 2) {
+    const words = empKey.split(" ");
+    const allPresent = queryTokens.every(
+      (tok) => words.some((w) => w.startsWith(tok))
+    );
+    if (allPresent) return 4;
+  }
+  return null;
 }
 
 function searchEmployers(query: string, limit: number): EmployerResult[] {
-  const q = norm(query);
-  if (!q || q.length < 2) return [];
+  const queryNorm = canonicalNorm(query);
+  if (!queryNorm || queryNorm.length < 2) return [];
 
-  const startsWithMatch: IndexEntry[] = [];
-  const wordStartsMatch: IndexEntry[] = [];
-  const containsMatch: IndexEntry[] = [];
+  const queryTokens = queryNorm.split(" ").filter((t) => t.length >= 2);
+
+  const hits: { emp: SearchEntry; score: number }[] = [];
 
   for (const emp of employers) {
-    const normName = norm(emp.n);
-    if (normName.startsWith(q)) {
-      startsWithMatch.push(emp);
-    } else if (normName.split(" ").some((w) => w.startsWith(q))) {
-      wordStartsMatch.push(emp);
-    } else if (normName.includes(q)) {
-      containsMatch.push(emp);
+    const score = matchScore(emp._k, queryNorm, queryTokens);
+    if (score !== null) {
+      hits.push({ emp, score });
+      // Once we have plenty of candidates across all tiers, stop scanning
+      if (hits.length >= limit * 10) break;
     }
-    // Early exit: we have enough candidates
-    if (startsWithMatch.length + wordStartsMatch.length + containsMatch.length >= limit * 8) break;
   }
 
-  const combined = [...startsWithMatch, ...wordStartsMatch, ...containsMatch];
-  return combined.slice(0, limit).map((emp) => ({
+  // Sort: score asc (better match first), then FOIR desc, then alpha
+  hits.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
+    if (b.emp.f !== a.emp.f) return b.emp.f - a.emp.f;
+    return a.emp.n.localeCompare(b.emp.n);
+  });
+
+  return hits.slice(0, limit).map(({ emp }) => ({
     employer_name: emp.n,
     best_category: emp.c,
     best_foir: emp.f,
