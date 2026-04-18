@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { API_BASE_URL } from "@/lib/api";
 
-const DEBOUNCE_MS = 280;
+const DEBOUNCE_MS = 300;
 const MIN_CHARS = 3;
 const MAX_RESULTS = 10;
 
@@ -25,6 +25,7 @@ export function useEmployerSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const search = useCallback(async (q: string) => {
     if (!q || q.trim().length < MIN_CHARS) {
@@ -33,19 +34,21 @@ export function useEmployerSearch() {
       return;
     }
 
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
     setLoading(true);
     setError(null);
 
     try {
-      const { data, error: rpcError } = await supabase.rpc(
-        "emi_calc_search_employer",
-        { search_query: q.trim(), result_limit: MAX_RESULTS }
-      );
-
-      if (rpcError) throw rpcError;
-      setResults((data as EmployerResult[]) || []);
+      const url = `${API_BASE_URL}/employers/search?q=${encodeURIComponent(q.trim())}&limit=${MAX_RESULTS}`;
+      const resp = await fetch(url, { signal: abortRef.current.signal });
+      if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
+      const data = await resp.json();
+      setResults(data.results || []);
     } catch (err: any) {
-      setError(err.message);
+      if (err.name === "AbortError") return;
+      setError(err.message || "Search unavailable");
       setResults([]);
     } finally {
       setLoading(false);
@@ -69,6 +72,7 @@ export function useEmployerSearch() {
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
     };
   }, [query, search]);
 
@@ -76,6 +80,7 @@ export function useEmployerSearch() {
     setQuery("");
     setResults([]);
     setError(null);
+    if (abortRef.current) abortRef.current.abort();
   }, []);
 
   return { query, setQuery, results, loading, error, clear };

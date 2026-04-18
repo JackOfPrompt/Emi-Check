@@ -10,6 +10,8 @@ import {
   Modal,
   Pressable,
   Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -181,9 +183,13 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
             <ActivityIndicator size="small" color={colors.primary} style={styles.actionIcon} />
           )}
           {(value || inputText.length > 0) && !loading && (
-            <TouchableOpacity onPress={handleClear} style={styles.actionIcon} hitSlop={8}>
-              <Feather name="x" size={16} color={colors.mutedForeground} />
-            </TouchableOpacity>
+            <Pressable
+              onPress={(e) => { e.stopPropagation?.(); handleClear(); }}
+              style={styles.actionIcon}
+              hitSlop={12}
+            >
+              <Feather name="x" size={18} color={colors.mutedForeground} />
+            </Pressable>
           )}
         </View>
       </TouchableOpacity>
@@ -237,54 +243,62 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
         onRequestClose={() => setSheetOpen(false)}
         statusBarTranslucent
       >
-        <Pressable style={styles.backdrop} onPress={() => setSheetOpen(false)}>
-          <Pressable
-            style={[styles.sheet, { backgroundColor: colors.card }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Handle */}
-            <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-              Search Employer
-            </Text>
-
-            {/* Inline search input inside sheet */}
-            <View
-              style={[
-                styles.sheetInputRow,
-                { borderColor: colors.primary, backgroundColor: colors.background },
-              ]}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setSheetOpen(false)}>
+            <Pressable
+              style={[styles.sheet, { backgroundColor: colors.card }]}
+              onPress={(e) => e.stopPropagation()}
             >
-              <Feather name="search" size={16} color={colors.primary} style={styles.searchIcon} />
-              <TextInput
-                autoFocus
-                style={[styles.input, { color: colors.foreground }]}
-                value={inputText}
-                onChangeText={handleChangeText}
-                placeholder="Type employer name..."
-                placeholderTextColor={colors.mutedForeground}
-                autoCorrect={false}
-                autoCapitalize="words"
-                returnKeyType="search"
-              />
-              {loading && <ActivityIndicator size="small" color={colors.primary} />}
-              {inputText.length > 0 && !loading && (
-                <TouchableOpacity onPress={() => { setInputText(""); setQuery(""); clear(); }}>
-                  <Feather name="x" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              )}
-            </View>
+              {/* Handle */}
+              <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
-            {/* Results list */}
-            {hasResults && (
-              <FlatList
-                data={results}
-                keyExtractor={(item, i) => `${item.employer_name}-${i}`}
-                keyboardShouldPersistTaps="handled"
-                style={styles.resultList}
-                renderItem={({ item, index }) => (
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
+                Search Employer
+              </Text>
+
+              {/* Inline search input inside sheet */}
+              <View
+                style={[
+                  styles.sheetInputRow,
+                  { borderColor: colors.primary, backgroundColor: colors.background },
+                ]}
+              >
+                <Feather name="search" size={16} color={colors.primary} style={styles.searchIcon} />
+                <TextInput
+                  autoFocus
+                  style={[styles.input, { color: colors.foreground }]}
+                  value={inputText}
+                  onChangeText={handleChangeText}
+                  placeholder="Type employer name..."
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCorrect={false}
+                  autoCapitalize="words"
+                  returnKeyType="search"
+                />
+                {loading && <ActivityIndicator size="small" color={colors.primary} />}
+                {inputText.length > 0 && !loading && (
                   <TouchableOpacity
+                    onPress={() => { setInputText(""); setQuery(""); clear(); }}
+                    hitSlop={8}
+                  >
+                    <Feather name="x" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Scrollable results area — keyboard won't cover this */}
+              <ScrollView
+                style={styles.resultList}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Results list */}
+                {hasResults && results.map((item, index) => (
+                  <TouchableOpacity
+                    key={`${item.employer_name}-${index}`}
                     style={[
                       styles.resultRow,
                       {
@@ -298,11 +312,7 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
                     <View
                       style={[
                         styles.resultIcon,
-                        {
-                          backgroundColor: item.is_blocked
-                            ? "#fee2e2"
-                            : colors.accent,
-                        },
+                        { backgroundColor: item.is_blocked ? "#fee2e2" : colors.accent },
                       ]}
                     >
                       <Feather
@@ -324,12 +334,7 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
                               </Text>
                             </View>
                             <View style={[styles.badge, { backgroundColor: colors.background }]}>
-                              <Text
-                                style={[
-                                  styles.badgeText,
-                                  { color: foirColor(item.best_foir, colors) },
-                                ]}
-                              >
+                              <Text style={[styles.badgeText, { color: foirColor(item.best_foir, colors) }]}>
                                 FOIR {Math.round((item.best_foir || 0) * 100)}%
                               </Text>
                             </View>
@@ -344,7 +349,7 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
                         ) : (
                           <View style={[styles.badge, { backgroundColor: "#fee2e2" }]}>
                             <Text style={[styles.badgeText, { color: colors.destructive }]}>
-                              Not eligible
+                              Restricted employer
                             </Text>
                           </View>
                         )}
@@ -352,52 +357,52 @@ export function EmployerSearch({ value, onSelect, error: fieldError }: Props) {
                     </View>
                     <Feather name="chevron-right" size={16} color={colors.border} />
                   </TouchableOpacity>
+                ))}
+
+                {/* Not found state */}
+                {notFound && (
+                  <View style={styles.notFoundArea}>
+                    <View style={[styles.notFoundIcon, { backgroundColor: colors.muted }]}>
+                      <Feather name="search" size={24} color={colors.mutedForeground} />
+                    </View>
+                    <Text style={[styles.notFoundTitle, { color: colors.foreground }]}>
+                      "{inputText}" not found
+                    </Text>
+                    <Text style={[styles.notFoundSub, { color: colors.mutedForeground }]}>
+                      Your employer might not be in our lender database yet.
+                      You can still proceed — just select your employer category manually.
+                    </Text>
+                  </View>
                 )}
-              />
-            )}
 
-            {/* Not found state */}
-            {notFound && (
-              <View style={styles.notFoundArea}>
-                <View style={[styles.notFoundIcon, { backgroundColor: colors.muted }]}>
-                  <Feather name="search" size={24} color={colors.mutedForeground} />
-                </View>
-                <Text style={[styles.notFoundTitle, { color: colors.foreground }]}>
-                  "{inputText}" not found
-                </Text>
-                <Text style={[styles.notFoundSub, { color: colors.mutedForeground }]}>
-                  Your employer might not be in our lender database yet.
-                  You can still proceed — just select your employer category manually.
-                </Text>
-              </View>
-            )}
+                {/* Empty state (query < 3 chars) */}
+                {!hasResults && !notFound && inputText.length < 3 && (
+                  <View style={styles.notFoundArea}>
+                    <Feather name="search" size={32} color={colors.border} />
+                    <Text style={[styles.notFoundSub, { color: colors.mutedForeground, marginTop: 10 }]}>
+                      Type at least 3 characters to search
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
 
-            {/* Empty state (query < 3 chars) */}
-            {!hasResults && !notFound && inputText.length < 3 && (
-              <View style={styles.notFoundArea}>
-                <Feather name="search" size={32} color={colors.border} />
-                <Text style={[styles.notFoundSub, { color: colors.mutedForeground, marginTop: 10 }]}>
-                  Type at least 3 characters to search
+              {/* Not in list option — always visible at bottom */}
+              <TouchableOpacity
+                style={[
+                  styles.unlistedBtn,
+                  { backgroundColor: colors.muted, borderColor: colors.border },
+                ]}
+                onPress={handleContinueUnlisted}
+                activeOpacity={0.7}
+              >
+                <Feather name="skip-forward" size={15} color={colors.mutedForeground} />
+                <Text style={[styles.unlistedText, { color: colors.foreground }]}>
+                  My company is not in this list — continue anyway
                 </Text>
-              </View>
-            )}
-
-            {/* Not in list option */}
-            <TouchableOpacity
-              style={[
-                styles.unlistedBtn,
-                { backgroundColor: colors.muted, borderColor: colors.border },
-              ]}
-              onPress={handleContinueUnlisted}
-              activeOpacity={0.7}
-            >
-              <Feather name="skip-forward" size={15} color={colors.mutedForeground} />
-              <Text style={[styles.unlistedText, { color: colors.foreground }]}>
-                My company is not in this list — continue anyway
-              </Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
