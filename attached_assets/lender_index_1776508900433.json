@@ -1,0 +1,188 @@
+{
+  "lenders": [
+    {
+      "lender": "axis_finance",
+      "lender_display": "Axis Finance",
+      "file": "axis_finance.json",
+      "total_active_employers": 60561,
+      "category_hierarchy": [
+        "SUPER_CAT_A",
+        "CAT_A",
+        "CAT_B",
+        "CAT_D",
+        "CAT_E",
+        "BLOCKED"
+      ],
+      "category_foir_guidance": {
+        "SUPER_CAT_A": 0.75,
+        "CAT_A": 0.7,
+        "CAT_B": 0.65,
+        "CAT_D": 0.55,
+        "CAT_E": 0.5,
+        "BLOCKED": 0.0
+      },
+      "total_blocked_employers": 2587
+    },
+    {
+      "lender": "idfc_first_bank",
+      "lender_display": "IDFC First Bank",
+      "file": "idfc_first_bank.json",
+      "total_active_employers": 93455,
+      "category_hierarchy": [
+        "ACE_PLUS",
+        "ACE",
+        "CAT_SA",
+        "CAT_A",
+        "CAT_B",
+        "CAT_C",
+        "CAT_D",
+        "CAT_P",
+        "DNS"
+      ],
+      "category_foir_guidance": {
+        "ACE_PLUS": 0.8,
+        "ACE": 0.75,
+        "CAT_SA": 0.75,
+        "CAT_A": 0.7,
+        "CAT_B": 0.65,
+        "CAT_C": 0.6,
+        "CAT_D": 0.55,
+        "CAT_P": 0.5,
+        "DNS": 0.0
+      },
+      "total_dns_employers": 1864
+    },
+    {
+      "lender": "yes_bank",
+      "lender_display": "Yes Bank",
+      "file": "yes_bank.json",
+      "total_active_employers": 26613,
+      "category_hierarchy": [
+        "DIAMOND_PLUS",
+        "DIAMOND",
+        "GOLD_PLUS",
+        "GOLD",
+        "SILVER_PLUS",
+        "SILVER",
+        "SELECT_ITBPO",
+        "NEGATIVE"
+      ],
+      "category_foir_guidance": {
+        "DIAMOND_PLUS": 0.75,
+        "DIAMOND": 0.72,
+        "GOLD_PLUS": 0.7,
+        "GOLD": 0.65,
+        "SILVER_PLUS": 0.6,
+        "SILVER": 0.55,
+        "SELECT_ITBPO": 0.7,
+        "NEGATIVE": 0.0
+      },
+      "total_negative_employers": 2012
+    },
+    {
+      "lender": "tata_capital",
+      "lender_display": "Tata Capital",
+      "file": "tata_capital.json",
+      "total_active_employers": 40595,
+      "category_hierarchy": [
+        "TATA_GROUP",
+        "SUPER_CAT_A",
+        "CAT_A",
+        "CAT_B",
+        "CAT_C",
+        "DELISTED"
+      ],
+      "category_foir_guidance": {
+        "TATA_GROUP": 0.8,
+        "SUPER_CAT_A": 0.75,
+        "CAT_A": 0.7,
+        "CAT_B": 0.65,
+        "CAT_C": 0.55,
+        "DELISTED": 0.0
+      },
+      "total_delisted_employers": 2678
+    },
+    {
+      "lender": "icici_bank",
+      "lender_display": "ICICI Bank",
+      "file": "icici_bank.json",
+      "total_active_employers": 38707,
+      "category_hierarchy": [
+        "ELITE",
+        "SUPER_PRIME",
+        "PREFERRED",
+        "OPEN_MARKET"
+      ],
+      "category_foir_guidance": {
+        "ELITE": 0.75,
+        "SUPER_PRIME": 0.72,
+        "PREFERRED": 0.65,
+        "OPEN_MARKET": 0.55
+      }
+    },
+    {
+      "lender": "hdb_financial",
+      "lender_display": "HDB Financial Services (HDFC Group)",
+      "file": "hdb_financial.json",
+      "total_active_employers": 52066,
+      "category_hierarchy": [
+        "CAT_A",
+        "CAT_B",
+        "CAT_C",
+        "CAT_D"
+      ],
+      "category_foir_guidance": {
+        "CAT_A": 0.7,
+        "CAT_B": 0.65,
+        "CAT_C": 0.6,
+        "CAT_D": 0.55
+      }
+    },
+    {
+      "lender": "kotak_mahindra_bank",
+      "lender_display": "Kotak Mahindra Bank",
+      "file": "kotak_mahindra_bank.json",
+      "total_active_employers": 49586,
+      "category_hierarchy": [
+        "CAT_A",
+        "CAT_A_PSU",
+        "CAT_B",
+        "CAT_C",
+        "CSC_C",
+        "CAT_D",
+        "CSC_D",
+        "NEGATIVE"
+      ],
+      "category_foir_guidance": {
+        "CAT_A": 0.75,
+        "CAT_A_PSU": 0.75,
+        "CAT_B": 0.65,
+        "CAT_C": 0.6,
+        "CSC_C": 0.55,
+        "CAT_D": 0.5,
+        "CSC_D": 0.5,
+        "NEGATIVE": 0.0
+      }
+    },
+    {
+      "lender": "aditya_birla_finance",
+      "lender_display": "Aditya Birla Finance",
+      "file": "aditya_birla_finance.json",
+      "total_active_employers": 25202,
+      "category_hierarchy": [
+        "CAT_A",
+        "CAT_B",
+        "CAT_C",
+        "CAT_D"
+      ],
+      "category_foir_guidance": {
+        "CAT_A": 0.7,
+        "CAT_B": 0.65,
+        "CAT_C": 0.6,
+        "CAT_D": 0.55
+      }
+    }
+  ],
+  "total_lenders": 8,
+  "total_employer_records": 386785
+}
