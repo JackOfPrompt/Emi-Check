@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -19,6 +20,17 @@ import { ToggleBoolean } from "@/components/ToggleBoolean";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmployerSearch } from "@/components/EmployerSearch";
 import { EmployerResult } from "@/hooks/useEmployerSearch";
+
+// Map lender DB category → our form employer_category for fallback
+function mapBestCategoryToFormCategory(bestCat: string): string {
+  const upper = bestCat?.toUpperCase() || "";
+  if (["SUPER_CAT_A", "CAT_SA", "ELITE", "SUPER_PRIME", "DIAMOND_PLUS", "DIAMOND"].includes(upper)) return "mnc";
+  if (["CAT_A", "CAT_B", "GOLD_PLUS", "GOLD", "PREFERRED", "ACE_PLUS"].includes(upper)) return "listed";
+  if (["CAT_C", "CAT_D", "SILVER_PLUS", "SILVER", "PREFERRED", "ACE", "SELECT_ITBPO"].includes(upper)) return "pvt_ltd";
+  if (["CAT_A_PSU", "CSC_C", "CSC_D", "TATA_GROUP"].includes(upper)) return "government_psu";
+  if (["CAT_E", "OPEN_MARKET"].includes(upper)) return "small_firm";
+  return "pvt_ltd"; // sensible default
+}
 
 function SectionCard({ title, children, colors }: any) {
   return (
@@ -76,6 +88,18 @@ export default function Screen1Employment() {
   const [empType, setEmpType] = useState(employment.employment_type || "");
   const [employerData, setEmployerData] = useState<EmployerResult | null>(employment.employer_data || null);
   const [employerCategory, setEmployerCategory] = useState(employment.employer_category || "");
+
+  // Auto-fill employer category when employer is selected/cleared
+  const handleEmployerSelect = (emp: EmployerResult | null) => {
+    setEmployerData(emp);
+    if (emp && emp.best_category !== "UNLISTED" && !emp.is_blocked) {
+      // Auto-map DB category to form category
+      setEmployerCategory(mapBestCategoryToFormCategory(emp.best_category));
+    } else if (!emp) {
+      setEmployerCategory("");
+    }
+    // For UNLISTED, keep existing value so user can pick manually
+  };
   const [monthlyIncome, setMonthlyIncome] = useState(employment.monthly_net_income || 0);
   const [workExp, setWorkExp] = useState<number | undefined>(employment.total_work_experience_years);
   const [tenureMonths, setTenureMonths] = useState<number | undefined>(employment.current_company_tenure_months);
@@ -100,7 +124,9 @@ export default function Screen1Employment() {
     if (!empType) newErrors.empType = "Please select employment type";
 
     if (empType === "salaried") {
-      if (!employerCategory) newErrors.employerCategory = "Please select employer type";
+      // Category required only when employer not found in DB (UNLISTED or no employer selected)
+      const employerFoundInDB = employerData && employerData.best_category !== "UNLISTED" && !employerData.is_blocked;
+      if (!employerFoundInDB && !employerCategory) newErrors.employerCategory = "Please select employer type";
       if (!monthlyIncome || monthlyIncome < 10000) newErrors.monthlyIncome = "Minimum salary ₹10,000";
       if (workExp === undefined) newErrors.workExp = "Required";
       if (tenureMonths === undefined) newErrors.tenureMonths = "Required";
@@ -134,10 +160,14 @@ export default function Screen1Employment() {
 
     const empData: any = { employment_type: empType };
     if (empType === "salaried") {
+      // Use auto-mapped category when employer found in DB, otherwise use manually selected one
+      const finalCategory = (employerData && employerData.best_category !== "UNLISTED" && !employerData.is_blocked)
+        ? mapBestCategoryToFormCategory(employerData.best_category)
+        : employerCategory;
       Object.assign(empData, {
         employer_name: employerData?.employer_name || null,
         employer_data: employerData || null,
-        employer_category: employerCategory,
+        employer_category: finalCategory,
         monthly_net_income: monthlyIncome,
         total_work_experience_years: workExp,
         current_company_tenure_months: tenureMonths,
@@ -253,24 +283,44 @@ export default function Screen1Employment() {
           <SectionCard title="Employer Details" colors={colors}>
             <EmployerSearch
               value={employerData}
-              onSelect={setEmployerData}
+              onSelect={handleEmployerSelect}
               error={errors.employerSearch}
             />
-            <SelectInput
-              label="Employer Category"
-              value={employerCategory}
-              onChange={(v) => setEmployerCategory(v as string)}
-              error={errors.employerCategory}
-              options={[
-                { label: "MNC / Multinational", value: "mnc", subLabel: "e.g. Google, Amazon, Infosys" },
-                { label: "Listed Company (NSE/BSE)", value: "listed", subLabel: "Publicly listed Indian company" },
-                { label: "Private Limited", value: "pvt_ltd", subLabel: "Registered Pvt Ltd company" },
-                { label: "Government / PSU", value: "government_psu", subLabel: "Govt, PSU, Defence, Railways" },
-                { label: "Small Firm / Startup", value: "small_firm", subLabel: "Unregistered or small business" },
-                { label: "Proprietorship", value: "proprietorship", subLabel: "Owner-run shop or firm" },
-              ]}
-              placeholder="Select employer category"
-            />
+
+            {/* Show auto-detected category badge when employer found in DB */}
+            {employerData && employerData.best_category !== "UNLISTED" && !employerData.is_blocked ? (
+              <View style={[autoDetectStyles.banner, { backgroundColor: colors.accent, borderColor: colors.primary + "30" }]}>
+                <Feather name="zap" size={13} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[autoDetectStyles.label, { color: colors.primary }]}>
+                    Employer category auto-detected
+                  </Text>
+                  <Text style={[autoDetectStyles.sub, { color: colors.mutedForeground }]}>
+                    Lender category: {employerData.best_category} · FOIR {Math.round((employerData.best_foir || 0) * 100)}%
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              /* Show category dropdown when UNLISTED or no employer selected */
+              <SelectInput
+                label={employerData?.best_category === "UNLISTED"
+                  ? "Employer Category (required — employer not in database)"
+                  : "Employer Category"}
+                value={employerCategory}
+                onChange={(v) => setEmployerCategory(v as string)}
+                error={errors.employerCategory}
+                options={[
+                  { label: "MNC / Multinational", value: "mnc", subLabel: "e.g. Google, Amazon, Infosys" },
+                  { label: "Listed Company (NSE/BSE)", value: "listed", subLabel: "Publicly listed Indian company" },
+                  { label: "Private Limited", value: "pvt_ltd", subLabel: "Registered Pvt Ltd company" },
+                  { label: "Government / PSU", value: "government_psu", subLabel: "Govt, PSU, Defence, Railways" },
+                  { label: "Small Firm / Startup", value: "small_firm", subLabel: "Unregistered or small business" },
+                  { label: "Proprietorship", value: "proprietorship", subLabel: "Owner-run shop or firm" },
+                ]}
+                placeholder="Select employer category"
+                helperText={!employerData ? "Or search your employer above for better accuracy" : undefined}
+              />
+            )}
           </SectionCard>
 
           <SectionCard title="Income Details" colors={colors}>
@@ -440,6 +490,20 @@ const sectionStyles = StyleSheet.create({
     padding: 16,
     paddingBottom: 4,
   },
+});
+
+const autoDetectStyles = StyleSheet.create({
+  banner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+  },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 2 },
+  sub: { fontSize: 12 },
 });
 
 const fieldStyles = StyleSheet.create({
