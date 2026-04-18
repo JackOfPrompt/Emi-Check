@@ -27,6 +27,13 @@ function formatINR(value: number): string {
   return remaining + "," + result;
 }
 
+function calcEMIForAmount(principal: number, ratePercent: number, tenureMonths: number): number {
+  if (!principal || !tenureMonths) return 0;
+  const monthlyRate = ratePercent / 12 / 100;
+  if (monthlyRate === 0) return principal / tenureMonths;
+  return principal * monthlyRate / (1 - Math.pow(1 + monthlyRate, -tenureMonths));
+}
+
 const LOAN_TYPES = [
   {
     label: "Personal Loan",
@@ -118,9 +125,9 @@ export default function Screen3LoanIntent() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const selectedLoanInfo = LOAN_TYPES.find((l) => l.value === loanType);
-  const rate = RATE_DEFAULTS[loanType];
+  const rate = RATE_DEFAULTS[loanType] || 14;
 
-  // Live preview calculation
+  // Live preview calculation — requires loan type + tenure (not amount)
   const canPreview = !!(loanType && tenureMonths && employment.employment_type);
   const preview = canPreview
     ? calcEligibility(employment as any, obligations as any, {
@@ -128,6 +135,22 @@ export default function Screen3LoanIntent() {
         preferred_tenure_months: tenureMonths,
       })
     : null;
+
+  // Requirement-specific calculations (only when user has entered an amount)
+  const hasAmount = requestedAmount >= 50000;
+  const requirementEMI = hasAmount && tenureMonths
+    ? calcEMIForAmount(requestedAmount, rate, tenureMonths)
+    : 0;
+  const requirementFitsEligibility = !!(
+    preview?.eligible &&
+    hasAmount &&
+    requestedAmount <= preview.eligibleLoanAmount
+  );
+  const requirementExceedsEligibility = !!(
+    preview?.eligible &&
+    hasAmount &&
+    requestedAmount > preview.eligibleLoanAmount
+  );
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -232,41 +255,94 @@ export default function Screen3LoanIntent() {
 
       {/* Live eligibility preview */}
       {preview && (
-        <View style={[previewStyles.card, {
-          backgroundColor: preview.eligible ? colors.primary : colors.destructive,
-        }]}>
-          <View style={previewStyles.header}>
-            <Feather name={preview.eligible ? "zap" : "alert-circle"} size={16} color="#fff" />
-            <Text style={previewStyles.headerText}>
-              {preview.eligible ? "Estimated Eligibility Preview" : "Eligibility Challenge"}
+        <>
+          {/* ── Max Eligibility card ── */}
+          <View style={[previewStyles.card, {
+            backgroundColor: preview.eligible ? colors.primary : colors.destructive,
+          }]}>
+            <View style={previewStyles.header}>
+              <Feather name={preview.eligible ? "zap" : "alert-circle"} size={16} color="#fff" />
+              <Text style={previewStyles.headerText}>
+                {preview.eligible ? "Maximum Eligibility" : "Eligibility Challenge"}
+              </Text>
+            </View>
+
+            {preview.eligible ? (
+              <View style={previewStyles.stats}>
+                <View style={previewStyles.stat}>
+                  <Text style={previewStyles.statLabel}>Max Loan</Text>
+                  <Text style={previewStyles.statValue}>₹{formatINR(preview.eligibleLoanAmount)}</Text>
+                </View>
+                <View style={previewStyles.statDivider} />
+                <View style={previewStyles.stat}>
+                  <Text style={previewStyles.statLabel}>Max EMI/mo</Text>
+                  <Text style={previewStyles.statValue}>₹{formatINR(preview.eligibleEMI)}</Text>
+                </View>
+                <View style={previewStyles.statDivider} />
+                <View style={previewStyles.stat}>
+                  <Text style={previewStyles.statLabel}>FOIR</Text>
+                  <Text style={previewStyles.statValue}>{Math.round(preview.foirApplied * 100)}%</Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={previewStyles.notEligibleText}>
+                High existing obligations may limit eligibility. Reduce current EMIs for better results.
+              </Text>
+            )}
+
+            <Text style={previewStyles.disclaimer}>
+              * Indicative only. Final amount subject to lender verification.
             </Text>
           </View>
-          {preview.eligible ? (
-            <View style={previewStyles.stats}>
-              <View style={previewStyles.stat}>
-                <Text style={previewStyles.statLabel}>Max Loan</Text>
-                <Text style={previewStyles.statValue}>₹{formatINR(preview.eligibleLoanAmount)}</Text>
+
+          {/* ── Your Requirement card (when amount entered and fits within eligibility) ── */}
+          {requirementFitsEligibility && (
+            <View style={[previewStyles.card, { backgroundColor: "#16a34a" }]}>
+              <View style={previewStyles.header}>
+                <Feather name="check-circle" size={16} color="#fff" />
+                <Text style={previewStyles.headerText}>Your Requirement</Text>
               </View>
-              <View style={previewStyles.statDivider} />
-              <View style={previewStyles.stat}>
-                <Text style={previewStyles.statLabel}>EMI/month</Text>
-                <Text style={previewStyles.statValue}>₹{formatINR(preview.eligibleEMI)}</Text>
+              <View style={previewStyles.stats}>
+                <View style={previewStyles.stat}>
+                  <Text style={previewStyles.statLabel}>Loan Amount</Text>
+                  <Text style={previewStyles.statValue}>₹{formatINR(requestedAmount)}</Text>
+                </View>
+                <View style={previewStyles.statDivider} />
+                <View style={previewStyles.stat}>
+                  <Text style={previewStyles.statLabel}>EMI/month</Text>
+                  <Text style={previewStyles.statValue}>₹{formatINR(requirementEMI)}</Text>
+                </View>
+                <View style={previewStyles.statDivider} />
+                <View style={previewStyles.stat}>
+                  <Text style={previewStyles.statLabel}>Headroom</Text>
+                  <Text style={previewStyles.statValue}>₹{formatINR(preview.eligibleLoanAmount - requestedAmount)}</Text>
+                </View>
               </View>
-              <View style={previewStyles.statDivider} />
-              <View style={previewStyles.stat}>
-                <Text style={previewStyles.statLabel}>FOIR</Text>
-                <Text style={previewStyles.statValue}>{Math.round(preview.foirApplied * 100)}%</Text>
+              <View style={[previewStyles.fitBadge]}>
+                <Feather name="check" size={12} color="#fff" />
+                <Text style={previewStyles.fitBadgeText}>
+                  Well within your maximum eligibility of ₹{formatINR(preview.eligibleLoanAmount)}
+                </Text>
               </View>
             </View>
-          ) : (
-            <Text style={previewStyles.notEligibleText}>
-              High existing obligations may limit eligibility. Reduce current EMIs for better results.
-            </Text>
           )}
-          <Text style={previewStyles.disclaimer}>
-            * Indicative only. Final amount subject to lender verification.
-          </Text>
-        </View>
+
+          {/* ── Requirement exceeds eligibility warning ── */}
+          {requirementExceedsEligibility && (
+            <View style={[previewStyles.card, { backgroundColor: "#b45309" }]}>
+              <View style={previewStyles.header}>
+                <Feather name="alert-triangle" size={16} color="#fff" />
+                <Text style={previewStyles.headerText}>Requirement Exceeds Eligibility</Text>
+              </View>
+              <Text style={previewStyles.notEligibleText}>
+                You need ₹{formatINR(requestedAmount)} but your current maximum eligibility is
+                ₹{formatINR(preview.eligibleLoanAmount)}.{" "}
+                Shortfall: ₹{formatINR(requestedAmount - preview.eligibleLoanAmount)}.
+                {"\n"}Consider reducing existing EMIs or choosing a longer tenure.
+              </Text>
+            </View>
+          )}
+        </>
       )}
     </StepLayout>
   );
@@ -319,4 +395,15 @@ const previewStyles = StyleSheet.create({
   statDivider: { width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.25)" },
   notEligibleText: { color: "#fff", fontSize: 13, lineHeight: 20, marginBottom: 8 },
   disclaimer: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontStyle: "italic" },
+  fitBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 10,
+  },
+  fitBadgeText: { color: "#fff", fontSize: 12, flex: 1, lineHeight: 16 },
 });

@@ -1,4 +1,4 @@
-import React, { useState, forwardRef } from "react";
+import React, { useState, forwardRef, useEffect } from "react";
 import {
   View,
   TextInput,
@@ -38,6 +38,13 @@ export const CurrencyInput = forwardRef<TextInput, CurrencyInputProps>(
     const colors = useColors();
     const [isFocused, setIsFocused] = useState(false);
     const [rawText, setRawText] = useState(value ? value.toString() : "");
+
+    // Sync rawText when value changes externally (e.g. navigating back to screen)
+    useEffect(() => {
+      if (!isFocused) {
+        setRawText(value ? value.toString() : "");
+      }
+    }, [value]);
 
     const displayValue = isFocused
       ? rawText
