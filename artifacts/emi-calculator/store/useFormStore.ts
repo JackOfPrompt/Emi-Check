@@ -1,9 +1,12 @@
 import { create } from "zustand";
 import { EligibilityResult } from "@/lib/eligibility";
+import { EmployerResult } from "@/hooks/useEmployerSearch";
 
 export interface EmploymentData {
   employment_type: "salaried" | "self_employed" | "";
   // Salaried
+  employer_name?: string;
+  employer_data?: EmployerResult | null;
   employer_category?: string;
   total_work_experience_years?: number;
   current_company_tenure_months?: number;

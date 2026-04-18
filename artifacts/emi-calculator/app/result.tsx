@@ -16,7 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useFormStore } from "@/store/useFormStore";
 import { supabase } from "@/lib/supabase";
-import { calcTotalExistingEMI, calcCCObligation } from "@/lib/eligibility";
+import { calcTotalExistingEMI, calcCCObligation, LenderBreakdown } from "@/lib/eligibility";
 
 function formatINR(value: number): string {
   if (!value) return "0";
@@ -46,6 +46,31 @@ function getAge(dob: string): number {
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
   return age;
 }
+
+const CATEGORY_DISPLAY: Record<string, string> = {
+  SUPER_CAT_A: "Super Category A",
+  CAT_A: "Category A",
+  CAT_B: "Category B",
+  CAT_C: "Category C",
+  CAT_D: "Category D",
+  CAT_E: "Category E",
+  CAT_A_PSU: "Category A PSU",
+  ELITE: "Elite",
+  SUPER_PRIME: "Super Prime",
+  PREFERRED: "Preferred",
+  OPEN_MARKET: "Open Market",
+  DIAMOND_PLUS: "Diamond Plus",
+  DIAMOND: "Diamond",
+  GOLD_PLUS: "Gold Plus",
+  GOLD: "Gold",
+  SILVER_PLUS: "Silver Plus",
+  SILVER: "Silver",
+  SELECT_ITBPO: "Select IT/BPO",
+  ACE_PLUS: "Ace Plus",
+  ACE: "Ace",
+  TATA_GROUP: "Tata Group",
+  UNLISTED: "Standard",
+};
 
 export default function Screen4Result() {
   const colors = useColors();
@@ -134,6 +159,7 @@ export default function Screen4Result() {
 
         // Employment
         employment_type: employment.employment_type,
+        employer_name: employment.employer_name ?? null,
 
         // Salaried
         employer_category: employment.employer_category ?? null,
@@ -291,6 +317,21 @@ export default function Screen4Result() {
               <Feather name="award" size={16} color={colors.primary} />
               <Text style={[styles.lenderText, { color: colors.primary }]}>{lenderMessage}</Text>
             </View>
+
+            {/* Per-lender breakdown */}
+            {result.lenderBreakdown && result.lenderBreakdown.length > 0 && (
+              <View style={styles.breakdownSection}>
+                <Text style={[styles.breakdownTitle, { color: colors.foreground }]}>
+                  Lender-wise Eligibility
+                </Text>
+                <Text style={[styles.breakdownSubtitle, { color: colors.mutedForeground }]}>
+                  Based on your employer's lender category
+                </Text>
+                {result.lenderBreakdown.map((lb, i) => (
+                  <LenderBreakdownCard key={i} lender={lb} colors={colors} />
+                ))}
+              </View>
+            )}
           </>
         )}
 
@@ -374,7 +415,7 @@ export default function Screen4Result() {
             <FormField
               label="Last 4 characters of PAN (optional)"
               value={panLast4}
-              onChangeText={(t) => setPanLast4(t.toUpperCase())}
+              onChangeText={(t: string) => setPanLast4(t.toUpperCase())}
               error={errors.panLast4}
               placeholder="e.g. 1234"
               helperText="Helps get more accurate offers"
@@ -407,6 +448,67 @@ export default function Screen4Result() {
           </View>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function LenderBreakdownCard({ lender, colors }: { lender: LenderBreakdown; colors: any }) {
+  const foirPct = Math.round(lender.max_foir * 100);
+  const foirColor =
+    lender.max_foir >= 0.7
+      ? colors.success
+      : lender.max_foir >= 0.6
+      ? colors.warning
+      : colors.destructive;
+
+  const catDisplay =
+    CATEGORY_DISPLAY[lender.category] || lender.category;
+
+  return (
+    <View
+      style={[
+        styles.breakdownCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <View style={styles.breakdownCardHeader}>
+        <Text style={[styles.breakdownLender, { color: colors.foreground }]}>
+          {lender.lender_display}
+        </Text>
+        <View style={[styles.breakdownCatBadge, { backgroundColor: foirColor + "20" }]}>
+          <Text style={[styles.breakdownCatText, { color: foirColor }]}>
+            {catDisplay}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.breakdownStats}>
+        <View style={styles.breakdownStat}>
+          <Text style={[styles.breakdownStatLabel, { color: colors.mutedForeground }]}>
+            Max FOIR
+          </Text>
+          <Text style={[styles.breakdownStatValue, { color: foirColor }]}>
+            {foirPct}%
+          </Text>
+        </View>
+        <View style={[styles.breakdownStatDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.breakdownStat}>
+          <Text style={[styles.breakdownStatLabel, { color: colors.mutedForeground }]}>
+            Est. EMI
+          </Text>
+          <Text style={[styles.breakdownStatValue, { color: colors.foreground }]}>
+            ₹{formatINR(lender.eligible_emi)}
+          </Text>
+        </View>
+        <View style={[styles.breakdownStatDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.breakdownStat}>
+          <Text style={[styles.breakdownStatLabel, { color: colors.mutedForeground }]}>
+            Loan Amount
+          </Text>
+          <Text style={[styles.breakdownStatValue, { color: colors.foreground }]}>
+            ₹{formatINR(lender.eligible_loan_amount)}
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -528,6 +630,36 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   lenderText: { fontSize: 13, fontWeight: "600", flex: 1 },
+  breakdownSection: { marginBottom: 16 },
+  breakdownTitle: { fontSize: 17, fontWeight: "700", marginBottom: 4 },
+  breakdownSubtitle: { fontSize: 13, marginBottom: 12 },
+  breakdownCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  breakdownCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  breakdownLender: { fontSize: 14, fontWeight: "600", flex: 1 },
+  breakdownCatBadge: {
+    borderRadius: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  breakdownCatText: { fontSize: 11, fontWeight: "600" },
+  breakdownStats: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  breakdownStat: { flex: 1, alignItems: "center" },
+  breakdownStatLabel: { fontSize: 11, marginBottom: 3 },
+  breakdownStatValue: { fontSize: 14, fontWeight: "700" },
+  breakdownStatDivider: { width: 1, height: 32 },
   ineligibleCard: {
     borderWidth: 1.5,
     borderRadius: 16,

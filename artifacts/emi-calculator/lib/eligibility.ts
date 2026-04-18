@@ -1,3 +1,5 @@
+import { EmployerResult } from "@/hooks/useEmployerSearch";
+
 export const RATE_DEFAULTS: Record<string, number> = {
   personal: 14,
   home: 8.5,
@@ -26,26 +28,38 @@ export function calcTotalExistingEMI(obligations: {
 export function calcFOIR(profile: {
   employment_type: string;
   employer_category?: string;
+  employer_data?: EmployerResult | null;
   itr_filed?: boolean;
   gst_registered?: boolean;
   overdue_last_6months?: boolean;
   salary_mode?: string;
 }): number {
-  let foir = profile.employment_type === "salaried" ? 0.65 : 0.55;
+  let foir: number;
 
   if (profile.employment_type === "salaried") {
+    // Phase 2: use employer best_foir from lender database if available
     if (
-      ["mnc", "listed", "government_psu"].includes(
-        profile.employer_category || ""
-      )
+      profile.employer_data &&
+      !profile.employer_data.is_blocked &&
+      profile.employer_data.best_foir > 0
     ) {
-      foir = 0.75;
-    } else if (profile.employer_category === "pvt_ltd") {
-      foir = 0.7;
+      foir = profile.employer_data.best_foir;
+    } else {
+      // Fallback to category-based FOIR
+      foir = 0.65;
+      if (
+        ["mnc", "listed", "government_psu"].includes(
+          profile.employer_category || ""
+        )
+      ) {
+        foir = 0.75;
+      } else if (profile.employer_category === "pvt_ltd") {
+        foir = 0.7;
+      }
     }
-  }
-
-  if (profile.employment_type === "self_employed") {
+  } else {
+    // Self-employed
+    foir = 0.55;
     if (profile.itr_filed && profile.gst_registered) {
       foir = 0.65;
     } else if (profile.itr_filed) {
@@ -59,6 +73,15 @@ export function calcFOIR(profile: {
   return Math.min(0.8, Math.max(0.3, foir));
 }
 
+export interface LenderBreakdown {
+  lender: string;
+  lender_display: string;
+  category: string;
+  max_foir: number;
+  eligible_emi: number;
+  eligible_loan_amount: number;
+}
+
 export interface EligibilityResult {
   eligible: boolean;
   eligibleEMI: number;
@@ -69,6 +92,7 @@ export interface EligibilityResult {
   riskCategory: "low" | "medium" | "high";
   leadScore: number;
   interestRateAssumed?: number;
+  lenderBreakdown?: LenderBreakdown[];
 }
 
 export function calcEligibility(
@@ -77,6 +101,7 @@ export function calcEligibility(
     monthly_net_income?: number;
     avg_monthly_bank_credit?: number;
     employer_category?: string;
+    employer_data?: EmployerResult | null;
     current_company_tenure_months?: number;
     salary_mode?: string;
     pf_deducted?: boolean;
@@ -127,6 +152,38 @@ export function calcEligibility(
   const loanAmount =
     eligibleEMI * ((1 - Math.pow(1 + monthlyRate, -tenure)) / monthlyRate);
 
+  // Per-lender breakdown when employer data is available
+  let lenderBreakdown: LenderBreakdown[] | undefined;
+  if (
+    profile.employer_data &&
+    !profile.employer_data.is_blocked &&
+    profile.employer_data.lender_categories?.length > 0
+  ) {
+    lenderBreakdown = profile.employer_data.lender_categories
+      .filter((lc) => lc.max_foir > 0)
+      .map((lc) => {
+        let lFoir = lc.max_foir;
+        if (obligations.overdue_last_6months) lFoir = Math.max(0.3, lFoir - 0.15);
+        if (profile.salary_mode === "cash") lFoir = Math.max(0.3, lFoir - 0.1);
+        const lEligibleEMI = Math.max(0, income * lFoir - totalObligations);
+        const lLoanAmount =
+          lEligibleEMI > 0
+            ? lEligibleEMI *
+              ((1 - Math.pow(1 + monthlyRate, -tenure)) / monthlyRate)
+            : 0;
+        return {
+          lender: lc.lender,
+          lender_display: lc.lender_display,
+          category: lc.category,
+          max_foir: lc.max_foir,
+          eligible_emi: Math.round(lEligibleEMI),
+          eligible_loan_amount: Math.round(lLoanAmount),
+        };
+      })
+      .filter((lc) => lc.eligible_loan_amount > 0)
+      .slice(0, 5);
+  }
+
   let score = 50;
   if (profile.employment_type === "salaried") {
     if (
@@ -135,6 +192,10 @@ export function calcEligibility(
       )
     )
       score += 15;
+    if (profile.employer_data && !profile.employer_data.is_blocked) {
+      if (profile.employer_data.best_foir >= 0.75) score += 15;
+      else if (profile.employer_data.best_foir >= 0.65) score += 10;
+    }
     if ((profile.current_company_tenure_months || 0) >= 24) score += 10;
     if (profile.salary_mode === "bank_transfer") score += 10;
     if (profile.pf_deducted) score += 5;
@@ -160,5 +221,6 @@ export function calcEligibility(
     riskCategory,
     leadScore: score,
     interestRateAssumed: rate,
+    lenderBreakdown,
   };
 }

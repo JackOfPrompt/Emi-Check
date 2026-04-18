@@ -16,12 +16,17 @@ import { SelectInput } from "@/components/SelectInput";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { ToggleBoolean } from "@/components/ToggleBoolean";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { EmployerSearch } from "@/components/EmployerSearch";
+import { EmployerResult } from "@/hooks/useEmployerSearch";
 
 export default function Screen1Employment() {
   const colors = useColors();
   const { employment, setEmployment } = useFormStore();
 
   const [empType, setEmpType] = useState(employment.employment_type || "");
+  const [employerData, setEmployerData] = useState<EmployerResult | null>(
+    employment.employer_data || null
+  );
   const [employerCategory, setEmployerCategory] = useState(employment.employer_category || "");
   const [monthlyIncome, setMonthlyIncome] = useState(employment.monthly_net_income || 0);
   const [workExp, setWorkExp] = useState<number | undefined>(employment.total_work_experience_years);
@@ -75,6 +80,8 @@ export default function Screen1Employment() {
     const data: any = { employment_type: empType };
     if (empType === "salaried") {
       Object.assign(data, {
+        employer_name: employerData?.employer_name || null,
+        employer_data: employerData || null,
         employer_category: employerCategory,
         monthly_net_income: monthlyIncome,
         total_work_experience_years: workExp,
@@ -98,6 +105,8 @@ export default function Screen1Employment() {
         business_vintage_years: businessVintage,
         itr_filed: itrFiled,
         gst_registered: gstRegistered,
+        employer_name: null,
+        employer_data: null,
         employer_category: null,
         total_work_experience_years: null,
         current_company_tenure_months: null,
@@ -138,6 +147,13 @@ export default function Screen1Employment() {
 
       {empType === "salaried" && (
         <>
+          {/* Employer Search typeahead */}
+          <EmployerSearch
+            value={employerData}
+            onSelect={setEmployerData}
+            error={errors.employerSearch}
+          />
+
           <SelectInput
             label="Employer Type"
             value={employerCategory}
