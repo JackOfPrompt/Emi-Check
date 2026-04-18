@@ -1,0 +1,606 @@
+Build a mobile-first React + Vite EMI Eligibility Calculator app using Supabase as the backend. This is a lead generation tool for Indian loan products. Below are the EXACT specifications — do not deviate from field names, types, or logic.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TECH STACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- React 18 + Vite
+- @supabase/supabase-js for DB
+- React Hook Form for all forms
+- Zod for validation
+- Tailwind CSS for styling
+- React Router v6 for navigation
+- Lucide React for icons
+- Environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROJECT STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+src/
+├── App.jsx
+├── main.jsx
+├── lib/
+│   ├── supabase.js          — Supabase client init
+│   └── eligibility.js       — FOIR calculation engine
+├── store/
+│   └── useFormStore.js      — Zustand store to persist form state across screens
+├── screens/
+│   ├── Screen1Employment.jsx
+│   ├── Screen2Obligations.jsx
+│   ├── Screen3LoanIntent.jsx
+│   └── Screen4Result.jsx
+├── components/
+│   ├── ProgressBar.jsx
+│   ├── FieldError.jsx
+│   ├── CurrencyInput.jsx    — formats INR with commas on blur
+│   └── StepLayout.jsx       — shared wrapper with back button + progress bar
+└── hooks/
+    └── useUTM.js            — reads utm_source, utm_medium, utm_campaign from URL on mount
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUPABASE TABLE: emi_calc_leads
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Map EVERY form field to its exact column name:
+
+PERSONAL:
+  name                          TEXT
+  mobile                        TEXT
+  city                          TEXT
+  pincode                       TEXT
+  date_of_birth                 DATE (YYYY-MM-DD)
+  pan_last4                     TEXT (optional)
+
+EMPLOYMENT — common:
+  employment_type               TEXT  — 'salaried' | 'self_employed'
+
+EMPLOYMENT — salaried only (null if self_employed):
+  employer_category             TEXT  — 'mnc'|'listed'|'pvt_ltd'|'government_psu'|'small_firm'|'proprietorship'
+  total_work_experience_years   INT
+  current_company_tenure_months INT
+  pf_deducted                   BOOLEAN
+  salary_mode                   TEXT  — 'bank_transfer' | 'cash'
+  salary_bank_name              TEXT  (optional)
+  monthly_net_income            NUMERIC
+
+EMPLOYMENT — self_employed only (null if salaried):
+  business_type                 TEXT  — 'proprietor'|'partnership'|'pvt_ltd'|'freelancer'|'professional'
+  industry_type                 TEXT  — 'trading'|'manufacturing'|'services'|'professional'
+  business_vintage_years        INT
+  itr_filed                     BOOLEAN
+  gst_registered                BOOLEAN
+  avg_monthly_bank_credit       NUMERIC
+  monthly_net_income            NUMERIC  — set this equal to avg_monthly_bank_credit for self_employed
+
+OBLIGATIONS:
+  home_loan_emi                 NUMERIC  default 0
+  personal_loan_emi             NUMERIC  default 0
+  business_loan_emi             NUMERIC  default 0
+  vehicle_loan_emi              NUMERIC  default 0
+  total_existing_emi            NUMERIC  — auto-calculated: sum of all 4 EMIs above
+  active_loan_count             INT      default 0
+  total_cc_limit                NUMERIC  default 0
+  cc_outstanding                NUMERIC  default 0
+  cc_emi_equivalent             NUMERIC  — auto-calculated: cc_outstanding * 0.05
+  overdue_last_6months          BOOLEAN  default false
+
+LOAN INTENT:
+  loan_type                     TEXT  — 'personal'|'home'|'lap'|'business'
+  requested_loan_amount         NUMERIC
+  preferred_tenure_months       INT
+  interest_rate_assumed         NUMERIC  — set by system based on loan_type default
+
+CALCULATED (computed in eligibility.js before insert):
+  total_obligations             NUMERIC  — total_existing_emi + cc_emi_equivalent
+  foir_applied                  NUMERIC  — decimal e.g. 0.65
+  eligible_emi                  NUMERIC
+  eligible_loan_amount          NUMERIC
+  surplus_income                NUMERIC
+  risk_category                 TEXT  — 'low'|'medium'|'high'
+  lead_score                    INT  0–100
+
+META (set by app, not user):
+  source                        TEXT  — default 'organic'
+  utm_campaign                  TEXT
+  utm_source                    TEXT
+  utm_medium                    TEXT
+  status                        TEXT  — always insert as 'new'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ELIGIBILITY ENGINE — src/lib/eligibility.js
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Export these exact functions:
+
+const RATE_DEFAULTS = {
+  personal: 14,
+  home: 8.5,
+  lap: 11,
+  business: 16
+}
+
+export function calcCCObligation(cc_outstanding) {
+  return (cc_outstanding || 0) * 0.05
+}
+
+export function calcTotalExistingEMI(obligations) {
+  return (
+    (obligations.home_loan_emi || 0) +
+    (obligations.personal_loan_emi || 0) +
+    (obligations.business_loan_emi || 0) +
+    (obligations.vehicle_loan_emi || 0)
+  )
+}
+
+export function calcFOIR(profile) {
+  // Base FOIR by employment type
+  let foir = profile.employment_type === 'salaried' ? 0.65 : 0.55
+  // Boost for premium employer categories
+  if (profile.employment_type === 'salaried') {
+    if (['mnc','listed','government_psu'].includes(profile.employer_category)) foir = 0.75
+    else if (profile.employer_category === 'pvt_ltd') foir = 0.70
+  }
+  if (profile.employment_type === 'self_employed') {
+    if (profile.itr_filed && profile.gst_registered) foir = 0.65
+    else if (profile.itr_filed) foir = 0.60
+  }
+  // Reduce for risk
+  if (profile.overdue_last_6months) foir -= 0.15
+  if (profile.salary_mode === 'cash') foir -= 0.10
+  return Math.min(0.80, Math.max(0.30, foir))
+}
+
+export function calcEligibility(profile, obligations, loanIntent) {
+  const income = profile.employment_type === 'salaried'
+    ? profile.monthly_net_income
+    : profile.avg_monthly_bank_credit
+
+  const totalExistingEMI = calcTotalExistingEMI(obligations)
+  const ccObligation = calcCCObligation(obligations.cc_outstanding)
+  const totalObligations = totalExistingEMI + ccObligation
+  const foir = calcFOIR({ ...profile, ...obligations })
+  const eligibleEMI = (income * foir) - totalObligations
+
+  if (eligibleEMI <= 0) {
+    return { eligible: false, eligibleEMI: 0, eligibleLoanAmount: 0,
+             foirApplied: foir, totalObligations, surplusIncome: 0,
+             riskCategory: 'high', leadScore: 10 }
+  }
+
+  const rate = RATE_DEFAULTS[loanIntent.loan_type] || 12
+  const tenure = loanIntent.preferred_tenure_months || 60
+  const monthlyRate = rate / 12 / 100
+  const loanAmount = eligibleEMI * ((1 - Math.pow(1 + monthlyRate, -tenure)) / monthlyRate)
+
+  // Lead score
+  let score = 50
+  if (profile.employment_type === 'salaried') {
+    if (['mnc','listed','government_psu'].includes(profile.employer_category)) score += 15
+    if ((profile.current_company_tenure_months || 0) >= 24) score += 10
+    if (profile.salary_mode === 'bank_transfer') score += 10
+    if (profile.pf_deducted) score += 5
+  } else {
+    if (profile.itr_filed) score += 15
+    if (profile.gst_registered) score += 10
+    if ((profile.business_vintage_years || 0) >= 3) score += 10
+  }
+  if (obligations.overdue_last_6months) score -= 25
+  if (foir > 0.70) score -= 10
+  score = Math.min(100, Math.max(0, score))
+
+  const riskCategory = score >= 70 ? 'low' : score >= 40 ? 'medium' : 'high'
+
+  return {
+    eligible: true,
+    eligibleEMI: Math.round(eligibleEMI),
+    eligibleLoanAmount: Math.round(loanAmount),
+    foirApplied: foir,
+    totalObligations: Math.round(totalObligations),
+    surplusIncome: Math.round(income - (income * foir)),
+    riskCategory,
+    leadScore: score,
+    interestRateAssumed: rate
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ZUSTAND STORE — src/store/useFormStore.js
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Store these slices. Each screen saves its slice on Next:
+  employment: {}    — Screen 1 data
+  obligations: {}   — Screen 2 data
+  loanIntent: {}    — Screen 3 data
+  result: {}        — computed eligibility result
+  meta: {}          — utm params, source
+
+Actions: setEmployment, setObligations, setLoanIntent, setResult, reset
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCREEN 1 — Employment & Income
+Route: /
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Step 1 of 4. Show progress bar at 25%.
+
+Field: employment_type
+  Type: Radio button cards (large tap targets, full width)
+  Options: 'Salaried' (value: salaried) | 'Self Employed' (value: self_employed)
+  Required: yes
+
+=== IF employment_type === 'salaried' SHOW THESE FIELDS ===
+
+Field: employer_category
+  Label: Employer Type
+  Type: Select dropdown
+  Options:
+    mnc          → MNC / Multinational
+    listed       → Listed Company (NSE/BSE)
+    pvt_ltd      → Private Limited
+    government_psu → Government / PSU
+    small_firm   → Small Firm / Startup
+    proprietorship → Proprietorship
+  Required: yes
+
+Field: monthly_net_income
+  Label: Monthly Net Salary (In-Hand) ₹
+  Type: CurrencyInput (numeric, INR formatted)
+  Validation: min 10000, required
+  Required: yes
+
+Field: total_work_experience_years
+  Label: Total Work Experience
+  Type: Select
+  Options: 0-1 years (value:0), 1-2 years (value:1), 2-5 years (value:2),
+           5-10 years (value:5), 10+ years (value:10)
+  Required: yes
+
+Field: current_company_tenure_months
+  Label: Time at Current Company
+  Type: Select
+  Options: Less than 6 months (value:3), 6-12 months (value:9),
+           1-2 years (value:18), 2-5 years (value:36), 5+ years (value:60)
+  Required: yes
+
+Field: salary_mode
+  Label: Salary Received Via
+  Type: Radio cards
+  Options: Bank Transfer (value: bank_transfer) | Cash (value: cash)
+  Required: yes
+
+Field: salary_bank_name
+  Label: Salary Bank Name
+  Type: Text input
+  Required: no (optional)
+  Placeholder: e.g. HDFC, SBI, ICICI
+
+Field: pf_deducted
+  Label: Is PF (Provident Fund) deducted from salary?
+  Type: Toggle / Boolean radio (Yes / No)
+  Required: yes
+
+=== IF employment_type === 'self_employed' SHOW THESE FIELDS ===
+
+Field: business_type
+  Label: Business Structure
+  Type: Select dropdown
+  Options:
+    proprietor    → Sole Proprietor
+    partnership   → Partnership Firm
+    pvt_ltd       → Private Limited Company
+    freelancer    → Freelancer / Consultant
+    professional  → Professional (CA / Doctor / Lawyer)
+  Required: yes
+
+Field: industry_type
+  Label: Industry
+  Type: Select dropdown
+  Options:
+    trading       → Trading / Retail
+    manufacturing → Manufacturing
+    services      → Services
+    professional  → Professional Services
+  Required: yes
+
+Field: avg_monthly_bank_credit
+  Label: Average Monthly Bank Credits ₹
+  Type: CurrencyInput
+  Helper text: "Average amount credited to your business bank account per month"
+  Validation: min 10000, required
+  Required: yes
+
+Field: business_vintage_years
+  Label: Business Age
+  Type: Select
+  Options: Less than 1 year (value:0), 1-2 years (value:1),
+           2-3 years (value:2), 3-5 years (value:3), 5+ years (value:5)
+  Required: yes
+
+Field: itr_filed
+  Label: ITR Filed in Last 2 Years?
+  Type: Toggle / Boolean radio (Yes / No)
+  Required: yes
+
+Field: gst_registered
+  Label: GST Registered?
+  Type: Toggle / Boolean radio (Yes / No)
+  Required: yes
+
+NAVIGATION: "Next →" button. Validate all visible fields before proceeding.
+On submit: save to useFormStore employment slice. Navigate to /obligations.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCREEN 2 — Existing Obligations
+Route: /obligations
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Step 2 of 4. Progress bar at 50%.
+
+Show a helper text at top: "Enter 0 if not applicable"
+
+Field: home_loan_emi
+  Label: Home Loan EMI ₹/month
+  Type: CurrencyInput, default 0
+  Required: yes (can be 0)
+
+Field: personal_loan_emi
+  Label: Personal Loan EMI ₹/month
+  Type: CurrencyInput, default 0
+  Required: yes (can be 0)
+
+Field: business_loan_emi
+  Label: Business Loan EMI ₹/month
+  Type: CurrencyInput, default 0
+  Required: yes (can be 0)
+
+Field: vehicle_loan_emi
+  Label: Vehicle Loan EMI ₹/month
+  Type: CurrencyInput, default 0
+  Required: yes (can be 0)
+
+LIVE CALCULATED DISPLAY (update as user types, not a form field):
+  "Total Existing EMI: ₹XX,XXX/month"
+  Style: highlighted summary card below the 4 EMI fields
+
+Field: active_loan_count
+  Label: Number of Active Loans
+  Type: Select
+  Options: 0, 1, 2, 3, 4, 5+
+  Required: yes
+
+Field: total_cc_limit
+  Label: Total Credit Card Limit ₹
+  Type: CurrencyInput, default 0
+  Helper: "Combined limit across all credit cards"
+  Required: yes (can be 0)
+
+Field: cc_outstanding
+  Label: Current Credit Card Outstanding ₹
+  Type: CurrencyInput, default 0
+  Helper: "Total unpaid balance across all cards"
+  Required: yes (can be 0)
+
+LIVE CALCULATED DISPLAY (update as user types):
+  "Credit Card Monthly Obligation: ₹XXX/month (5% of outstanding)"
+  Style: small muted helper text below cc_outstanding
+
+Field: overdue_last_6months
+  Label: Any loan or credit card overdue in last 6 months?
+  Type: Toggle / Boolean radio (Yes / No)
+  Required: yes
+  If Yes: show warning banner "This may affect your eligibility significantly"
+
+VALIDATION:
+  - total_existing_emi must be < monthly_net_income (or avg_monthly_bank_credit)
+  - Show error: "Your total EMIs exceed your income. Please verify."
+  - cc_outstanding must be <= total_cc_limit
+
+NAVIGATION: Back to / | "Next →" to /loan-intent
+On submit: save to useFormStore obligations slice.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCREEN 3 — Loan Intent
+Route: /loan-intent
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Step 3 of 4. Progress bar at 75%.
+
+Field: loan_type
+  Label: What type of loan do you need?
+  Type: Radio button cards with icons (large tap targets)
+  Options:
+    personal  → Personal Loan       icon: User
+    home      → Home Loan           icon: Home
+    lap       → Loan Against Property (LAP) icon: Building
+    business  → Business Loan       icon: Briefcase
+  Required: yes
+
+Field: requested_loan_amount
+  Label: How much do you need? ₹
+  Type: CurrencyInput
+  Validation: min 50000
+  Required: yes
+
+Field: preferred_tenure_months
+  Label: Preferred Tenure
+  Type: Select — options change based on loan_type:
+    personal  → 12 months, 24 months, 36 months, 48 months, 60 months
+    home      → 60 months, 120 months, 180 months, 240 months, 300 months
+    lap       → 60 months, 120 months, 180 months, 240 months
+    business  → 12 months, 24 months, 36 months, 48 months, 60 months
+  Required: yes
+
+INFORMATIONAL DISPLAY (not a field, shown after loan_type is selected):
+  "Indicative interest rate: X% p.a." — pulled from RATE_DEFAULTS in eligibility.js
+  Style: small info badge
+
+NAVIGATION: Back to /obligations | "Check Eligibility →" button to /result
+On submit: save to useFormStore loanIntent slice. Run calcEligibility() immediately.
+Store result in useFormStore result slice. Navigate to /result.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCREEN 4 — Result + Lead Capture
+Route: /result
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Step 4 of 4. Progress bar at 100%.
+
+PART A — ELIGIBILITY RESULT (show BEFORE asking for contact details)
+
+If eligible === false:
+  Show: "Based on your current obligations, your eligible EMI is insufficient."
+  Show: "Consider reducing existing obligations or applying with a co-applicant."
+  CTA: "Talk to a Loan Advisor" (still shows lead capture form below)
+
+If eligible === true:
+  Show 3 result cards:
+    Card 1: "Eligible Loan Amount" — ₹XX,XX,XXX (formatted Indian number)
+    Card 2: "Monthly EMI" — ₹XX,XXX/month
+    Card 3: "FOIR Applied" — XX% (foir_applied * 100, rounded)
+
+  Show below cards:
+    "Surplus Income: ₹XX,XXX/month"
+    Risk indicator badge: Low Risk (green) / Medium Risk (amber) / High Risk (red)
+
+  Show lender match message:
+    If lead_score >= 70: "You qualify for Tier 1 Banks & NBFCs"
+    If lead_score >= 40: "You qualify for select NBFCs & private lenders"
+    If lead_score < 40:  "You may qualify for alternative lending products"
+
+PART B — LEAD CAPTURE FORM (shown below result, separated by divider)
+Heading: "Get personalised loan offers from top lenders"
+Sub: "Free. No spam. Your details are secure."
+
+Field: name
+  Label: Full Name
+  Type: Text input
+  Validation: required, min 3 chars
+
+Field: mobile
+  Label: Mobile Number
+  Type: Tel input
+  Validation: required, exactly 10 digits, starts with 6-9
+  Placeholder: 10-digit mobile number
+
+Field: city
+  Label: City
+  Type: Text input
+  Required: yes
+
+Field: pincode
+  Label: Pincode
+  Type: Text input (numeric, 6 digits)
+  Required: yes
+
+Field: date_of_birth
+  Label: Date of Birth
+  Type: Date picker (HTML date input)
+  Validation: age must be between 21 and 65 years
+  Required: yes
+
+Field: pan_last4
+  Label: Last 4 characters of PAN (optional)
+  Type: Text input, maxlength 4, uppercase
+  Helper: "Helps get more accurate offers"
+  Required: no
+
+CTA Button: "Get My Loan Offers →"
+  - On click: validate all lead capture fields
+  - Assemble full payload (all 4 screens + calculated fields + meta)
+  - Call supabase.from('emi_calc_leads').insert(payload)
+  - On success: show Thank You state
+  - On error: show inline error message, do NOT navigate away
+
+THANK YOU STATE (replace form after successful insert):
+  Heading: "You're all set! 🎉"
+  Body: "Our loan advisors will contact you within 24 hours with the best offers."
+  Show: Lead score badge "Your profile score: XX / 100"
+  CTA: "Calculate Again" — calls store.reset() and navigates to /
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SHARED COMPONENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ProgressBar.jsx:
+  Props: currentStep (1-4)
+  Show step dots + filled bar. Label each step: Employment, Obligations, Loan, Result
+
+StepLayout.jsx:
+  Props: title, subtitle, step, children
+  Renders: Header with lender logo placeholder + app name "LoanCheck"
+  Below header: ProgressBar
+  Below that: title + subtitle
+  Then: children (the form)
+  Fixed bottom: Next/Submit button passed as prop
+
+CurrencyInput.jsx:
+  Internally stores raw number
+  Displays formatted with Indian comma system (e.g. ₹12,50,000) on blur
+  On focus: shows raw number for easy editing
+  Passes numeric value (not string) to React Hook Form
+
+FieldError.jsx:
+  Props: message
+  Red text, small, shown below each field on validation error
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUPABASE INSERT — EXACT PAYLOAD SHAPE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+When inserting to emi_calc_leads, the payload must include ALL of these
+columns. Set unused fields (e.g. salaried fields when self_employed) to null.
+
+{
+  // Personal
+  name, mobile, city, pincode, date_of_birth, pan_last4,
+
+  // Employment — common
+  employment_type,
+
+  // Salaried (null if self_employed)
+  employer_category, total_work_experience_years, current_company_tenure_months,
+  pf_deducted, salary_mode, salary_bank_name, monthly_net_income,
+
+  // Self-employed (null if salaried)
+  business_type, industry_type, business_vintage_years, itr_filed,
+  gst_registered, avg_monthly_bank_credit,
+  // Note: monthly_net_income = avg_monthly_bank_credit for self_employed
+
+  // Obligations
+  home_loan_emi, personal_loan_emi, business_loan_emi, vehicle_loan_emi,
+  total_existing_emi,   // calculated
+  active_loan_count,
+  total_cc_limit, cc_outstanding,
+  cc_emi_equivalent,    // calculated: cc_outstanding * 0.05
+  overdue_last_6months,
+
+  // Loan intent
+  loan_type, requested_loan_amount, preferred_tenure_months, interest_rate_assumed,
+
+  // Calculated
+  total_obligations, foir_applied, eligible_emi, eligible_loan_amount,
+  surplus_income, risk_category, lead_score,
+
+  // Meta
+  source: 'organic',    // override with 'ads' if utm_source present
+  utm_source, utm_medium, utm_campaign,
+  status: 'new'
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UX RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Mobile-first. Max width 480px, centered on desktop. 
+2. All inputs min height 48px for easy tap.
+3. Show validation errors only on field blur or form submit — not while typing.
+4. Salaried fields must be completely hidden (not just disabled) when self_employed is selected and vice versa. Switching employment_type resets the hidden section's fields.
+5. Live calculations on Screen 2 update on every keystroke.
+6. Tenure options on Screen 3 must update immediately when loan_type changes.
+7. Interest rate badge on Screen 3 updates immediately when loan_type changes.
+8. If user navigates Back, re-populate fields from Zustand store (don't lose data).
+9. Format all currency displays in Indian number system (₹1,23,45,678).
+10. Disable the submit button and show a spinner while the Supabase insert is in progress.
+11. Never show the result page if the user navigates directly to /result without completing previous screens — redirect to /.
+12. All form state lives in Zustand, not in individual component state, so back navigation works.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ENV FILE (.env)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INSTALL THESE PACKAGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+npm install @supabase/supabase-js react-hook-form zod @hookform/resolvers zustand react-router-dom lucide-react
