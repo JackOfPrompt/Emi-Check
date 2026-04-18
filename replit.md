@@ -31,13 +31,18 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Purpose**: Lead generation tool for Indian loan products
 - **Tech**: React Native + Expo Router, Zustand, Supabase, expo-haptics
 - **Screens**:
-  - `/` — Screen 1: Employment & Income (salaried vs self-employed)
-  - `/obligations` — Screen 2: Existing loan/CC obligations
-  - `/loan-intent` — Screen 3: Loan type, amount, tenure
-  - `/result` — Screen 4: Eligibility result + lead capture form
+  - `/` — Screen 1: Profile (name+mobile captured FIRST for drop-off tracking, then employment)
+  - `/obligations` — Screen 2: Existing loan/CC obligations with live FOIR preview
+  - `/loan-intent` — Screen 3: Loan type cards, amount, tenure, live eligibility preview
+  - `/result` — Screen 4: Eligibility result + simplified lead capture (name/mobile pre-filled)
+- **Lead Flow**:
+  - Screen 1 "Continue" → inserts partial lead `{name, mobile, employment_type, status:'partial'}` → stores leadId
+  - Screen 4 "Get My Loan Offers" → updates same lead with full data + `status:'new'` (or inserts if no leadId)
 - **Backend**: Supabase table `emi_calc_leads` (all form data + computed fields)
 - **Env vars**: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - **Logic**: FOIR-based eligibility engine in `lib/eligibility.ts`
+- **Store**: `store/useFormStore.ts` — contact (name+mobile), employment, obligations, loanIntent, result, leadId
+- **Components**: StepLayout, ProgressBar, RadioCardGroup, SelectInput (bottom sheet), ToggleBoolean, CurrencyInput, EmployerSearch, PrimaryButton
 
 ### API Server (artifacts/api-server)
 - Express 5 backend serving on `/api`

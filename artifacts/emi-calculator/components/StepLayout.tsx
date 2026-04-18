@@ -42,7 +42,7 @@ export function StepLayout({
         style={[
           styles.header,
           {
-            paddingTop: topPad + 8,
+            paddingTop: topPad + 6,
             backgroundColor: colors.card,
             borderBottomColor: colors.border,
           },
@@ -50,21 +50,19 @@ export function StepLayout({
       >
         <View style={styles.headerRow}>
           {onBack ? (
-            <TouchableOpacity onPress={onBack} style={styles.backBtn} testID="back-button">
-              <Feather name="chevron-left" size={24} color={colors.primary} />
+            <TouchableOpacity onPress={onBack} style={styles.backBtn} testID="back-button" hitSlop={8}>
+              <View style={[styles.backCircle, { backgroundColor: colors.background }]}>
+                <Feather name="chevron-left" size={20} color={colors.primary} />
+              </View>
             </TouchableOpacity>
           ) : (
             <View style={styles.backBtn} />
           )}
           <View style={styles.logoArea}>
-            <View
-              style={[styles.logoIcon, { backgroundColor: colors.primary }]}
-            >
-              <Feather name="shield" size={14} color="#fff" />
+            <View style={[styles.logoIcon, { backgroundColor: colors.primary }]}>
+              <Feather name="shield" size={13} color="#fff" />
             </View>
-            <Text style={[styles.logoText, { color: colors.primary }]}>
-              LoanCheck
-            </Text>
+            <Text style={[styles.logoText, { color: colors.primary }]}>LoanCheck</Text>
           </View>
           <View style={styles.backBtn} />
         </View>
@@ -73,24 +71,24 @@ export function StepLayout({
         </View>
       </View>
 
-      {/* Content */}
+      {/* Scrollable content */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: bottomPad + 100 },
-        ]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad + 100 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            {subtitle}
-          </Text>
-        )}
+        {/* Step header */}
+        <View style={[styles.stepHeader, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.stepNumBadge, { backgroundColor: colors.accent }]}>
+            <Text style={[styles.stepNumText, { color: colors.primary }]}>Step {step} of 4</Text>
+          </View>
+          <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+          {subtitle && (
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
+          )}
+        </View>
+
         <View style={styles.formArea}>{children}</View>
       </ScrollView>
 
@@ -99,7 +97,7 @@ export function StepLayout({
         style={[
           styles.bottomBar,
           {
-            paddingBottom: bottomPad + 16,
+            paddingBottom: bottomPad + 12,
             backgroundColor: colors.card,
             borderTopColor: colors.border,
           },
@@ -112,65 +110,57 @@ export function StepLayout({
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
   header: {
     borderBottomWidth: 1,
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  backBtn: {
-    width: 36,
-    alignItems: "center",
-  },
-  logoArea: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  logoIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
+  backBtn: { width: 36 },
+  backCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  logoText: {
-    fontSize: 18,
-    fontWeight: "700",
+  logoArea: { flexDirection: "row", alignItems: "center", gap: 6 },
+  logoIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  progressWrapper: {
-    marginTop: 4,
+  logoText: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+  progressWrapper: {},
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  stepHeader: {
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
   },
-  scroll: {
-    flex: 1,
+  stepNumBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 8,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  formArea: {
-    gap: 4,
-  },
+  stepNumText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  title: { fontSize: 22, fontWeight: "800", marginBottom: 4, letterSpacing: -0.3 },
+  subtitle: { fontSize: 13, lineHeight: 18 },
+  formArea: { gap: 0 },
   bottomBar: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
   },

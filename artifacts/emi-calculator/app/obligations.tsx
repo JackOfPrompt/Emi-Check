@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useFormStore } from "@/store/useFormStore";
 import { StepLayout } from "@/components/StepLayout";
@@ -23,8 +24,21 @@ function formatINR(value: number): string {
     result = remaining.slice(-2) + "," + result;
     remaining = remaining.slice(0, remaining.length - 2);
   }
-  result = remaining + "," + result;
-  return result;
+  return remaining + "," + result;
+}
+
+function SectionCard({ title, subtitle, children, colors }: any) {
+  return (
+    <View style={[sectionStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {(title || subtitle) && (
+        <View style={[sectionStyles.titleRow, { borderBottomColor: colors.border }]}>
+          {title && <Text style={[sectionStyles.title, { color: colors.primary }]}>{title}</Text>}
+          {subtitle && <Text style={[sectionStyles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>}
+        </View>
+      )}
+      <View style={sectionStyles.body}>{children}</View>
+    </View>
+  );
 }
 
 export default function Screen2Obligations() {
@@ -35,10 +49,17 @@ export default function Screen2Obligations() {
   const [personalLoanEmi, setPersonalLoanEmi] = useState(obligations.personal_loan_emi || 0);
   const [businessLoanEmi, setBusinessLoanEmi] = useState(obligations.business_loan_emi || 0);
   const [vehicleLoanEmi, setVehicleLoanEmi] = useState(obligations.vehicle_loan_emi || 0);
-  const [activeLoanCount, setActiveLoanCount] = useState<number | undefined>(obligations.active_loan_count);
+  const [activeLoanCount, setActiveLoanCount] = useState<number | undefined>(
+    obligations.active_loan_count !== 0 ? obligations.active_loan_count : undefined
+  );
+  const [hasCC, setHasCC] = useState<boolean | undefined>(
+    obligations.total_cc_limit > 0 ? true : obligations.cc_outstanding > 0 ? true : undefined
+  );
   const [totalCCLimit, setTotalCCLimit] = useState(obligations.total_cc_limit || 0);
   const [ccOutstanding, setCcOutstanding] = useState(obligations.cc_outstanding || 0);
-  const [overdueLastSix, setOverdueLastSix] = useState<boolean | undefined>(obligations.overdue_last_6months ?? false);
+  const [overdueLastSix, setOverdueLastSix] = useState<boolean | undefined>(
+    obligations.overdue_last_6months === true ? true : obligations.overdue_last_6months === false ? false : undefined
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const totalExistingEMI = calcTotalExistingEMI({
@@ -47,21 +68,25 @@ export default function Screen2Obligations() {
     business_loan_emi: businessLoanEmi,
     vehicle_loan_emi: vehicleLoanEmi,
   });
-  const ccObligation = calcCCObligation(ccOutstanding);
+  const ccObligation = hasCC ? calcCCObligation(ccOutstanding) : 0;
+  const totalObligation = totalExistingEMI + ccObligation;
 
   const income =
     employment.employment_type === "salaried"
       ? employment.monthly_net_income || 0
       : employment.avg_monthly_bank_credit || 0;
 
+  const foirUsed = income > 0 ? (totalObligation / income) * 100 : 0;
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (activeLoanCount === undefined) newErrors.activeLoanCount = "Required";
-    if (overdueLastSix === undefined) newErrors.overdueLastSix = "Required";
-    if (income > 0 && totalExistingEMI >= income) {
+    if (activeLoanCount === undefined) newErrors.activeLoanCount = "Please select number of active loans";
+    if (overdueLastSix === undefined) newErrors.overdueLastSix = "Please answer this question";
+    if (hasCC === undefined) newErrors.hasCC = "Please answer this question";
+    if (income > 0 && totalExistingEMI > income) {
       newErrors.totalEMI = "Your total EMIs exceed your income. Please verify.";
     }
-    if (ccOutstanding > totalCCLimit && totalCCLimit > 0) {
+    if (hasCC && ccOutstanding > 0 && totalCCLimit > 0 && ccOutstanding > totalCCLimit) {
       newErrors.ccOutstanding = "Outstanding cannot exceed total credit card limit";
     }
     setErrors(newErrors);
@@ -80,158 +105,208 @@ export default function Screen2Obligations() {
       business_loan_emi: businessLoanEmi,
       vehicle_loan_emi: vehicleLoanEmi,
       active_loan_count: activeLoanCount || 0,
-      total_cc_limit: totalCCLimit,
-      cc_outstanding: ccOutstanding,
+      total_cc_limit: hasCC ? totalCCLimit : 0,
+      cc_outstanding: hasCC ? ccOutstanding : 0,
       overdue_last_6months: overdueLastSix || false,
     });
     router.push("/loan-intent");
   };
 
+  const hasAnyLoan = (activeLoanCount || 0) > 0;
+
   return (
     <StepLayout
       title="Existing Obligations"
-      subtitle="Enter 0 if not applicable"
+      subtitle="Enter 0 if you don't have a particular loan — this helps us calculate accurately"
       step={2}
       onBack={() => router.back()}
       submitButton={
-        <PrimaryButton
-          title="Next"
-          onPress={onNext}
-          icon="arrow-right"
-          testID="next-button"
-        />
+        <PrimaryButton title="Continue" onPress={onNext} icon="arrow-right" testID="next-button" />
       }
     >
-      <CurrencyInput
-        label="Home Loan EMI ₹/month"
-        value={homeLoanEmi}
-        onChangeValue={setHomeLoanEmi}
-        placeholder="0"
-      />
-      <CurrencyInput
-        label="Personal Loan EMI ₹/month"
-        value={personalLoanEmi}
-        onChangeValue={setPersonalLoanEmi}
-        placeholder="0"
-      />
-      <CurrencyInput
-        label="Business Loan EMI ₹/month"
-        value={businessLoanEmi}
-        onChangeValue={setBusinessLoanEmi}
-        placeholder="0"
-      />
-      <CurrencyInput
-        label="Vehicle Loan EMI ₹/month"
-        value={vehicleLoanEmi}
-        onChangeValue={setVehicleLoanEmi}
-        placeholder="0"
-      />
-
-      {/* Total EMI Summary Card */}
-      <View
-        style={[
-          styles.summaryCard,
-          { backgroundColor: colors.accent, borderColor: colors.primary },
-        ]}
-      >
-        <Text style={[styles.summaryLabel, { color: colors.primary }]}>
-          Total Existing EMI
-        </Text>
-        <Text style={[styles.summaryValue, { color: colors.primary }]}>
-          ₹{formatINR(totalExistingEMI)}/month
-        </Text>
-        {errors.totalEMI && (
-          <Text style={[styles.summaryError, { color: colors.destructive }]}>
-            {errors.totalEMI}
-          </Text>
-        )}
-      </View>
-
-      <SelectInput
-        label="Number of Active Loans"
-        value={activeLoanCount}
-        onChange={(v) => setActiveLoanCount(v as number)}
-        error={errors.activeLoanCount}
-        options={[
-          { label: "0", value: 0 },
-          { label: "1", value: 1 },
-          { label: "2", value: 2 },
-          { label: "3", value: 3 },
-          { label: "4", value: 4 },
-          { label: "5+", value: 5 },
-        ]}
-        placeholder="Select count"
-      />
-
-      <CurrencyInput
-        label="Total Credit Card Limit ₹"
-        value={totalCCLimit}
-        onChangeValue={setTotalCCLimit}
-        helperText="Combined limit across all credit cards"
-        placeholder="0"
-      />
-      <CurrencyInput
-        label="Current Credit Card Outstanding ₹"
-        value={ccOutstanding}
-        onChangeValue={setCcOutstanding}
-        helperText={`CC Monthly Obligation: ₹${formatINR(ccObligation)}/month (5% of outstanding)`}
-        error={errors.ccOutstanding}
-        placeholder="0"
-      />
-
-      <ToggleBoolean
-        label="Any loan or credit card overdue in last 6 months?"
-        value={overdueLastSix}
-        onChange={setOverdueLastSix}
-        error={errors.overdueLastSix}
-      />
-
-      {overdueLastSix === true && (
-        <View
-          style={[
-            styles.warningBanner,
-            { backgroundColor: "#fef3c7", borderColor: "#d97706" },
+      {/* Active loans question */}
+      <SectionCard title="Active Loans" colors={colors}>
+        <SelectInput
+          label="How many active loans do you have?"
+          value={activeLoanCount}
+          onChange={(v) => {
+            setActiveLoanCount(v as number);
+            if (v === 0) {
+              setHomeLoanEmi(0);
+              setPersonalLoanEmi(0);
+              setBusinessLoanEmi(0);
+              setVehicleLoanEmi(0);
+            }
+            setErrors((e) => ({ ...e, activeLoanCount: "" }));
+          }}
+          error={errors.activeLoanCount}
+          options={[
+            { label: "0 — No active loans", value: 0 },
+            { label: "1 loan", value: 1 },
+            { label: "2 loans", value: 2 },
+            { label: "3 loans", value: 3 },
+            { label: "4 loans", value: 4 },
+            { label: "5 or more loans", value: 5 },
           ]}
-        >
-          <Text style={[styles.warningText, { color: "#92400e" }]}>
-            This may affect your eligibility significantly
-          </Text>
+          placeholder="Select number of loans"
+        />
+
+        {/* EMI inputs — only shown when loans exist */}
+        {hasAnyLoan && (
+          <>
+            <Text style={[sectionStyles.subheading, { color: colors.mutedForeground }]}>
+              Enter monthly EMI for each loan (0 if not applicable)
+            </Text>
+            {(activeLoanCount || 0) >= 1 && (
+              <CurrencyInput label="Home Loan EMI ₹/month" value={homeLoanEmi} onChangeValue={setHomeLoanEmi} placeholder="0" />
+            )}
+            <CurrencyInput label="Personal Loan EMI ₹/month" value={personalLoanEmi} onChangeValue={setPersonalLoanEmi} placeholder="0" />
+            {employment.employment_type === "self_employed" && (
+              <CurrencyInput label="Business Loan EMI ₹/month" value={businessLoanEmi} onChangeValue={setBusinessLoanEmi} placeholder="0" />
+            )}
+            <CurrencyInput label="Vehicle Loan EMI ₹/month" value={vehicleLoanEmi} onChangeValue={setVehicleLoanEmi} placeholder="0" />
+          </>
+        )}
+      </SectionCard>
+
+      {/* Live EMI summary */}
+      {(totalExistingEMI > 0 || ccObligation > 0) && (
+        <View style={[summaryStyles.card, { backgroundColor: colors.surface ?? colors.accent, borderColor: colors.primary + "40" }]}>
+          <View style={summaryStyles.row}>
+            <View style={summaryStyles.col}>
+              <Text style={[summaryStyles.label, { color: colors.primary }]}>Total EMI</Text>
+              <Text style={[summaryStyles.value, { color: colors.primary }]}>₹{formatINR(totalExistingEMI)}</Text>
+            </View>
+            {ccObligation > 0 && (
+              <>
+                <View style={[summaryStyles.divider, { backgroundColor: colors.primary + "30" }]} />
+                <View style={summaryStyles.col}>
+                  <Text style={[summaryStyles.label, { color: colors.primary }]}>CC Obligation</Text>
+                  <Text style={[summaryStyles.value, { color: colors.primary }]}>₹{formatINR(ccObligation)}</Text>
+                </View>
+              </>
+            )}
+            {income > 0 && (
+              <>
+                <View style={[summaryStyles.divider, { backgroundColor: colors.primary + "30" }]} />
+                <View style={summaryStyles.col}>
+                  <Text style={[summaryStyles.label, { color: colors.primary }]}>Used FOIR</Text>
+                  <Text style={[
+                    summaryStyles.value,
+                    { color: foirUsed > 60 ? colors.destructive : colors.primary }
+                  ]}>
+                    {Math.round(foirUsed)}%
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+          {errors.totalEMI && (
+            <Text style={[summaryStyles.error, { color: colors.destructive }]}>⚠ {errors.totalEMI}</Text>
+          )}
         </View>
       )}
+
+      {/* Credit Card section */}
+      <SectionCard title="Credit Cards" colors={colors}>
+        <ToggleBoolean
+          label="Do you have any credit cards?"
+          value={hasCC}
+          onChange={(v) => {
+            setHasCC(v);
+            if (!v) { setTotalCCLimit(0); setCcOutstanding(0); }
+            setErrors((e) => ({ ...e, hasCC: "" }));
+          }}
+          error={errors.hasCC}
+          yesLabel="Yes, I have credit cards"
+          noLabel="No credit cards"
+        />
+
+        {hasCC === true && (
+          <>
+            <CurrencyInput
+              label="Total Credit Card Limit ₹"
+              value={totalCCLimit}
+              onChangeValue={setTotalCCLimit}
+              helperText="Combined limit across all your credit cards"
+              placeholder="e.g. 2,00,000"
+            />
+            <CurrencyInput
+              label="Current Outstanding Balance ₹"
+              value={ccOutstanding}
+              onChangeValue={setCcOutstanding}
+              helperText={`Monthly obligation: ₹${formatINR(ccObligation)} (5% of outstanding)`}
+              error={errors.ccOutstanding}
+              placeholder="0"
+            />
+          </>
+        )}
+      </SectionCard>
+
+      {/* Overdue history */}
+      <SectionCard title="Repayment History" colors={colors}>
+        <ToggleBoolean
+          label="Any loan or credit card overdue or late payment in the last 6 months?"
+          value={overdueLastSix}
+          onChange={(v) => {
+            setOverdueLastSix(v);
+            setErrors((e) => ({ ...e, overdueLastSix: "" }));
+          }}
+          error={errors.overdueLastSix}
+          yesLabel="Yes"
+          noLabel="No (Clean record)"
+        />
+
+        {overdueLastSix === true && (
+          <View style={[warningStyles.banner, { backgroundColor: "#fef3c7", borderColor: "#d97706" }]}>
+            <Feather name="alert-triangle" size={14} color="#92400e" />
+            <Text style={[warningStyles.text, { color: "#92400e" }]}>
+              Any overdue payment significantly reduces eligible FOIR. You can still apply with some lenders.
+            </Text>
+          </View>
+        )}
+
+        {overdueLastSix === false && (
+          <View style={[warningStyles.banner, { backgroundColor: "#f0fdf4", borderColor: "#16a34a" }]}>
+            <Feather name="check-circle" size={14} color="#16a34a" />
+            <Text style={[warningStyles.text, { color: "#15803d" }]}>
+              Clean repayment history — this improves your loan eligibility!
+            </Text>
+          </View>
+        )}
+      </SectionCard>
     </StepLayout>
   );
 }
 
-const styles = StyleSheet.create({
-  summaryCard: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  summaryLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  summaryValue: {
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  summaryError: {
-    fontSize: 12,
-    marginTop: 6,
-  },
-  warningBanner: {
-    borderWidth: 1.5,
-    borderRadius: 10,
+const sectionStyles = StyleSheet.create({
+  card: { borderWidth: 1, borderRadius: 16, marginBottom: 14, overflow: "hidden" },
+  titleRow: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  title: { fontSize: 12, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" },
+  subtitle: { fontSize: 12, marginTop: 2 },
+  subheading: { fontSize: 13, marginBottom: 12, fontStyle: "italic" },
+  body: { padding: 16, paddingBottom: 4 },
+});
+
+const summaryStyles = StyleSheet.create({
+  card: { borderWidth: 1.5, borderRadius: 14, padding: 16, marginBottom: 14 },
+  row: { flexDirection: "row", alignItems: "center" },
+  col: { flex: 1, alignItems: "center" },
+  divider: { width: 1, height: 36, marginHorizontal: 8 },
+  label: { fontSize: 11, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 },
+  value: { fontSize: 20, fontWeight: "800" },
+  error: { fontSize: 12, marginTop: 8 },
+});
+
+const warningStyles = StyleSheet.create({
+  banner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
     padding: 12,
-    marginBottom: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 8,
   },
-  warningText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
+  text: { fontSize: 13, flex: 1, lineHeight: 18 },
 });

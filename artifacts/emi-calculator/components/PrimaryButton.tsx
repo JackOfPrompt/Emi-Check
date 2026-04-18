@@ -16,6 +16,7 @@ interface PrimaryButtonProps {
   disabled?: boolean;
   icon?: string;
   testID?: string;
+  variant?: "primary" | "outline";
 }
 
 export function PrimaryButton({
@@ -25,28 +26,36 @@ export function PrimaryButton({
   disabled = false,
   icon,
   testID,
+  variant = "primary",
 }: PrimaryButtonProps) {
   const colors = useColors();
+  const isPrimary = variant === "primary";
 
   return (
     <TouchableOpacity
       style={[
         styles.btn,
         {
-          backgroundColor:
-            disabled || loading ? colors.border : colors.primary,
+          backgroundColor: disabled || loading
+            ? colors.border
+            : isPrimary ? colors.primary : "transparent",
+          borderColor: isPrimary ? "transparent" : colors.primary,
+          borderWidth: isPrimary ? 0 : 2,
         },
       ]}
       onPress={onPress}
       disabled={disabled || loading}
+      activeOpacity={0.85}
       testID={testID}
     >
       {loading ? (
-        <ActivityIndicator color="#fff" />
+        <ActivityIndicator color={isPrimary ? "#fff" : colors.primary} />
       ) : (
         <View style={styles.inner}>
-          <Text style={styles.text}>{title}</Text>
-          {icon && <Feather name={icon as any} size={18} color="#fff" />}
+          <Text style={[styles.text, { color: isPrimary ? "#fff" : colors.primary }]}>
+            {title}
+          </Text>
+          {icon && <Feather name={icon as any} size={18} color={isPrimary ? "#fff" : colors.primary} />}
         </View>
       )}
     </TouchableOpacity>
@@ -55,8 +64,8 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   btn: {
-    minHeight: 52,
-    borderRadius: 12,
+    height: 54,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -66,8 +75,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   text: {
-    color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });

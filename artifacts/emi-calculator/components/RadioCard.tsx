@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ViewStyle,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -51,51 +50,82 @@ export function RadioCardGroup({
                 horizontal && styles.cardHorizontal,
                 {
                   borderColor: isSelected ? colors.primary : colors.border,
-                  backgroundColor: isSelected ? colors.accent : colors.card,
+                  backgroundColor: isSelected ? colors.surface ?? colors.accent : colors.card,
+                  shadowColor: isSelected ? colors.primary : "transparent",
                 },
               ]}
               onPress={() => onChange(opt.value)}
+              activeOpacity={0.7}
               testID={`radio-${opt.value}`}
             >
-              {opt.icon && (
+              {/* Left: icon + text */}
+              {!horizontal && opt.icon && (
+                <View
+                  style={[
+                    styles.iconWrap,
+                    {
+                      backgroundColor: isSelected ? colors.primary : colors.muted,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name={opt.icon as any}
+                    size={18}
+                    color={isSelected ? "#fff" : colors.mutedForeground}
+                  />
+                </View>
+              )}
+
+              {horizontal && opt.icon && (
                 <Feather
                   name={opt.icon as any}
-                  size={22}
+                  size={20}
                   color={isSelected ? colors.primary : colors.mutedForeground}
-                  style={styles.icon}
+                  style={{ marginBottom: 4 }}
                 />
               )}
-              <View style={styles.textArea}>
+
+              <View style={[styles.textArea, horizontal && { alignItems: "center" }]}>
                 <Text
                   style={[
                     styles.cardLabel,
                     {
                       color: isSelected ? colors.primary : colors.foreground,
-                      fontWeight: isSelected ? "600" : "400",
+                      fontWeight: isSelected ? "700" : "500",
                     },
                   ]}
                 >
                   {opt.label}
                 </Text>
-                {opt.subLabel && (
+                {opt.subLabel && !horizontal && (
                   <Text
-                    style={[
-                      styles.subLabel,
-                      { color: colors.mutedForeground },
-                    ]}
+                    style={[styles.subLabel, { color: colors.mutedForeground }]}
                   >
                     {opt.subLabel}
                   </Text>
                 )}
               </View>
-              {isSelected && (
+
+              {/* Right: radio circle */}
+              {!horizontal && (
                 <View
                   style={[
-                    styles.checkCircle,
-                    { backgroundColor: colors.primary },
+                    styles.radioCircle,
+                    {
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected ? colors.primary : "transparent",
+                    },
                   ]}
                 >
-                  <Feather name="check" size={12} color="#fff" />
+                  {isSelected && (
+                    <View style={styles.radioInner} />
+                  )}
+                </View>
+              )}
+
+              {horizontal && isSelected && (
+                <View style={[styles.checkDot, { backgroundColor: colors.primary }]}>
+                  <Feather name="check" size={8} color="#fff" />
                 </View>
               )}
             </TouchableOpacity>
@@ -103,68 +133,73 @@ export function RadioCardGroup({
         })}
       </View>
       {error && (
-        <Text style={[styles.error, { color: colors.destructive }]}>
-          {error}
-        </Text>
+        <Text style={[styles.error, { color: colors.destructive }]}>⚠ {error}</Text>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  group: {
-    gap: 10,
-  },
-  horizontal: {
-    flexDirection: "row",
-  },
+  container: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: "600", marginBottom: 8 },
+  group: { gap: 8 },
+  horizontal: { flexDirection: "row" },
   card: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderRadius: 12,
+    borderWidth: 2,
+    borderRadius: 14,
     padding: 14,
-    minHeight: 54,
+    minHeight: 58,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cardHorizontal: {
     flex: 1,
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 70,
-    gap: 6,
+    minHeight: 72,
+    paddingVertical: 12,
+    gap: 2,
   },
-  icon: {
-    marginRight: 12,
-  },
-  textArea: {
-    flex: 1,
-  },
-  cardLabel: {
-    fontSize: 15,
-  },
-  subLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  checkCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginRight: 12,
   },
-  error: {
-    fontSize: 12,
-    marginTop: 4,
+  textArea: { flex: 1 },
+  cardLabel: { fontSize: 15 },
+  subLabel: { fontSize: 12, marginTop: 2 },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
   },
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fff",
+  },
+  checkDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  error: { fontSize: 12, marginTop: 4 },
 });

@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 
 interface ToggleBooleanProps {
@@ -7,9 +8,18 @@ interface ToggleBooleanProps {
   value: boolean | undefined;
   onChange: (val: boolean) => void;
   error?: string;
+  yesLabel?: string;
+  noLabel?: string;
 }
 
-export function ToggleBoolean({ label, value, onChange, error }: ToggleBooleanProps) {
+export function ToggleBoolean({
+  label,
+  value,
+  onChange,
+  error,
+  yesLabel = "Yes",
+  noLabel = "No",
+}: ToggleBooleanProps) {
   const colors = useColors();
 
   return (
@@ -21,85 +31,76 @@ export function ToggleBoolean({ label, value, onChange, error }: ToggleBooleanPr
             styles.btn,
             {
               borderColor: value === true ? colors.primary : colors.border,
-              backgroundColor: value === true ? colors.accent : colors.card,
+              backgroundColor: value === true ? colors.primary : colors.card,
+              shadowColor: value === true ? colors.primary : "transparent",
             },
           ]}
           onPress={() => onChange(true)}
-          testID={`toggle-yes`}
+          activeOpacity={0.7}
+          testID="toggle-yes"
         >
+          {value === true && (
+            <Feather name="check" size={14} color="#fff" style={{ marginRight: 6 }} />
+          )}
           <Text
             style={[
               styles.btnText,
-              {
-                color: value === true ? colors.primary : colors.mutedForeground,
-                fontWeight: value === true ? "600" : "400",
-              },
+              { color: value === true ? "#fff" : colors.mutedForeground },
             ]}
           >
-            Yes
+            {yesLabel}
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={[
             styles.btn,
             {
               borderColor: value === false ? colors.destructive : colors.border,
-              backgroundColor:
-                value === false ? "#fef2f2" : colors.card,
+              backgroundColor: value === false ? "#fee2e2" : colors.card,
             },
           ]}
           onPress={() => onChange(false)}
-          testID={`toggle-no`}
+          activeOpacity={0.7}
+          testID="toggle-no"
         >
+          {value === false && (
+            <Feather name="x" size={14} color={colors.destructive} style={{ marginRight: 6 }} />
+          )}
           <Text
             style={[
               styles.btnText,
-              {
-                color:
-                  value === false ? colors.destructive : colors.mutedForeground,
-                fontWeight: value === false ? "600" : "400",
-              },
+              { color: value === false ? colors.destructive : colors.mutedForeground },
             ]}
           >
-            No
+            {noLabel}
           </Text>
         </TouchableOpacity>
       </View>
       {error && (
-        <Text style={[styles.error, { color: colors.destructive }]}>
-          {error}
-        </Text>
+        <Text style={[styles.error, { color: colors.destructive }]}>⚠ {error}</Text>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  row: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  container: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: "600", marginBottom: 8, lineHeight: 20 },
+  row: { flexDirection: "row", gap: 10 },
   btn: {
     flex: 1,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderRadius: 10,
-    minHeight: 50,
+    borderWidth: 2,
+    borderRadius: 12,
+    minHeight: 52,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  btnText: {
-    fontSize: 15,
-  },
-  error: {
-    fontSize: 12,
-    marginTop: 4,
-  },
+  btnText: { fontSize: 15, fontWeight: "600" },
+  error: { fontSize: 12, marginTop: 4 },
 });

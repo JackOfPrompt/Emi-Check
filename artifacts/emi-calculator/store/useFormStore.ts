@@ -2,6 +2,11 @@ import { create } from "zustand";
 import { EligibilityResult } from "@/lib/eligibility";
 import { EmployerResult } from "@/hooks/useEmployerSearch";
 
+export interface ContactData {
+  full_name: string;
+  mobile: string;
+}
+
 export interface EmploymentData {
   employment_type: "salaried" | "self_employed" | "";
   // Salaried
@@ -48,19 +53,28 @@ export interface MetaData {
 }
 
 interface FormStore {
+  contact: ContactData;
   employment: EmploymentData;
   obligations: ObligationsData;
   loanIntent: LoanIntentData;
   result: EligibilityResult | null;
   meta: MetaData;
+  leadId: string | null;
 
+  setContact: (data: ContactData) => void;
   setEmployment: (data: EmploymentData) => void;
   setObligations: (data: ObligationsData) => void;
   setLoanIntent: (data: LoanIntentData) => void;
   setResult: (result: EligibilityResult) => void;
   setMeta: (meta: MetaData) => void;
+  setLeadId: (id: string) => void;
   reset: () => void;
 }
+
+const defaultContact: ContactData = {
+  full_name: "",
+  mobile: "",
+};
 
 const defaultObligations: ObligationsData = {
   home_loan_emi: 0,
@@ -80,22 +94,28 @@ const defaultLoanIntent: LoanIntentData = {
 };
 
 export const useFormStore = create<FormStore>((set) => ({
+  contact: defaultContact,
   employment: { employment_type: "" },
   obligations: defaultObligations,
   loanIntent: defaultLoanIntent,
   result: null,
   meta: { source: "organic" },
+  leadId: null,
 
+  setContact: (data) => set({ contact: data }),
   setEmployment: (data) => set({ employment: data }),
   setObligations: (data) => set({ obligations: data }),
   setLoanIntent: (data) => set({ loanIntent: data }),
   setResult: (result) => set({ result }),
   setMeta: (meta) => set({ meta }),
+  setLeadId: (id) => set({ leadId: id }),
   reset: () =>
     set({
+      contact: defaultContact,
       employment: { employment_type: "" },
       obligations: defaultObligations,
       loanIntent: defaultLoanIntent,
       result: null,
+      leadId: null,
     }),
 }));
